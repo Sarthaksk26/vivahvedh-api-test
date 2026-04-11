@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.ts",
     "migrate": "ts-node src/scripts/migrate.ts",
+    "build": "npx tsc",
     "start": "node dist/server.js"
   },
   "keywords": [],
