@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import prisma from '../config/db';
 import fs from 'fs';
 import path from 'path';
+import { maskPrivateDetails } from '../utils/sanitize';
 
 export const getMyProfile = async (req: Request, res: Response) => {
   try {
@@ -31,7 +32,7 @@ export const getMyProfile = async (req: Request, res: Response) => {
     // Never send the password hash back to the frontend!
     const { password, ...safeUser } = fullUser;
 
-    res.status(200).json(safeUser);
+    res.status(200).json(maskPrivateDetails(safeUser, true));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error fetching profile' });

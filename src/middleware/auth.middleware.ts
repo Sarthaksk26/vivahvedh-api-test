@@ -22,7 +22,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   try {
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || 'vivahvedh_super_secret_jwt_key_2026'
+      process.env.JWT_SECRET as string
     );
     req.user = decoded;
     next();
@@ -31,18 +31,32 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET as string
+      );
+      req.user = decoded;
+    } catch (error) {
+      // Ignore invalid tokens for optional auth
+    }
+  }
+  next();
+};
+
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Unauthorized.' });
   }
 
-  // Developer Bypass: For your local testing, we are allowing standard users 
-  // to view the Admin panel so you don't need to manually inject SQL to elevate your role!
-  /*
   if (req.user.role !== 'ADMIN') {
     return res.status(403).json({ error: 'Forbidden. Admin elevation required.' });
   }
-  */
 
   next();
 };
