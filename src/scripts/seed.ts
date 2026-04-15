@@ -64,7 +64,7 @@ async function seed() {
       },
       physical: {
         create: {
-          height: 178,
+          height: "178",
           weight: 75,
           bloodGroup: 'B+',
           complexion: 'Wheatish',
@@ -142,7 +142,7 @@ async function seed() {
       },
       physical: {
         create: {
-          height: 162,
+          height: "162",
           weight: 55,
           bloodGroup: 'A+',
           complexion: 'Fair',
@@ -216,7 +216,7 @@ async function seed() {
       },
       physical: {
         create: {
-          height: 170,
+          height: "170",
           weight: 68,
           bloodGroup: 'O+',
           complexion: 'Medium',

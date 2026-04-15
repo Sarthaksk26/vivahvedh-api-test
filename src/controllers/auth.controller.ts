@@ -13,7 +13,7 @@ const registerSchema = z.object({
   lastName: z.string(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
-  email: z.string().email().optional()
+  email: z.string().email()
 });
 
 export const register = async (req: Request, res: Response) => {
@@ -41,7 +41,7 @@ export const register = async (req: Request, res: Response) => {
       data: {
         regId: newRegId,
         mobile: validatedData.mobile,
-        email: validatedData.email || null,
+        email: validatedData.email,
         password: hashedPassword,
         accountStatus: 'INACTIVE', // Safe default workflow
         profile: {

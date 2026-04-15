@@ -1,19 +1,32 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import searchRoutes from './routes/search.routes';
 import adminRoutes from './routes/admin.routes';
 import connectionRoutes from './routes/connection.routes';
 import publicRoutes from './routes/public.routes';
-
+import paymentRoutes from './routes/payment.routes';
 const app = express();
 
-import path from 'path';
-
-// Middleware
+// Security Middleware
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// Path import fix for uploads
+// import path from 'path'; // moved to top
+
+// Rate Limiting for Auth routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each IP to 20 requests per windowMs
+  message: { error: 'Too many authentication attempts. Please try again later.' }
+});
+app.use('/api/auth', authLimiter);
 
 // Publicly expose the 'uploads' folder mapping from the exact filepath
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -25,6 +38,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/connections', connectionRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

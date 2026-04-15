@@ -10,6 +10,9 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER || '', 
     pass: process.env.SMTP_PASS || '', 
   },
+  connectionTimeout: 5000, // 5 seconds
+  greetingTimeout: 5000,   // 5 seconds
+  socketTimeout: 5000,     // 5 seconds
 });
 
 export const sendMail = async (to: string, subject: string, htmlContent: string) => {
@@ -93,4 +96,39 @@ export const sendConnectionAcceptedEmail = async (to: string, receiverName: stri
     </div>
   `;
   await sendMail(to, `${accepterName} Accepted Your Request!`, html);
+};
+export const sendPaymentStatusEmail = async (to: string, name: string, plan: string, status: 'APPROVED' | 'REJECTED') => {
+  const isApproved = status === 'APPROVED';
+  const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid ${isApproved ? '#16a34a' : '#dc2626'};">
+      <h1 style="color: ${isApproved ? '#16a34a' : '#dc2626'};">Payment ${status}! ${isApproved ? '🎉' : '⚠️'}</h1>
+      <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
+      <p>Your payment submission for the <b>${plan} Plan</b> has been ${status.toLowerCase()}.</p>
+      ${isApproved 
+        ? `<p>Your account features have been upgraded immediately. You now have full access according to your plan.</p>`
+        : `<p>Unfortunately, your transaction could not be verified. Please ensure the transaction ID is correct and the screenshot is clear, then try again.</p>`
+      }
+      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+        Go to Dashboard
+      </a>
+    </div>
+  `;
+  await sendMail(to, `Payment ${status} | Vivahvedh Matrimony`, html);
+};
+
+export const sendEnquiryNotificationEmail = async (adminEmail: string, enquiry: any) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+      <h2 style="color: #e11d48; border-bottom: 2px solid #eee; padding-bottom: 10px;">New Enquiry Received</h2>
+      <p><b>From:</b> ${enquiry.firstName} ${enquiry.lastName}</p>
+      <p><b>Email:</b> ${enquiry.email}</p>
+      <p><b>Mobile:</b> ${enquiry.mobile}</p>
+      <p><b>Subject:</b> ${enquiry.subject}</p>
+      <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 10px;">
+        <p><b>Message:</b></p>
+        <p>${enquiry.message}</p>
+      </div>
+    </div>
+  `;
+  await sendMail(adminEmail, `[NEW ENQUIRY] ${enquiry.subject}`, html);
 };

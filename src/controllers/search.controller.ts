@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/db';
+import { maskPrivateDetails } from '../utils/sanitize';
 
 export const executeSearch = async (req: Request, res: Response) => {
   try {
@@ -53,7 +54,14 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // Strip out sensitive base user fields before sending
     const safeMatches = matches.map(user => {
-      const { password, role, ...safeQuery } = user;
+      const sameUser = user.id === req.user?.id;
+      const safeQuery = maskPrivateDetails(user, sameUser);
+      
+      // Guest users only see surname
+      if (!req.user && safeQuery.profile) {
+        safeQuery.profile.firstName = '***';
+      }
+
       return safeQuery;
     });
 
@@ -99,7 +107,32 @@ export const getPublicProfile = async (req: Request, res: Response) => {
       }).catch(() => {});
     }
 
-    const { password, role, ...safeQuery } = userProfile;
+    // Contact Info Check
+    let showContactInfo = false;
+    
+    if (viewerId && viewerId !== id) {
+      // Check if there is an ACCEPTED request between them
+      const connection = await prisma.request.findFirst({
+        where: {
+          OR: [
+            { senderId: viewerId as string, receiverId: id as string, status: 'ACCEPTED' },
+            { senderId: id as string, receiverId: viewerId as string, status: 'ACCEPTED' }
+          ]
+        }
+      });
+      if (connection) {
+        showContactInfo = true;
+      }
+    } else if (viewerId === id) {
+      showContactInfo = true;
+    }
+
+    const safeQuery = maskPrivateDetails(userProfile, showContactInfo);
+
+    if (!req.user && safeQuery.profile) {
+        safeQuery.profile.firstName = '***';
+    }
+
     res.status(200).json(safeQuery);
 
   } catch (error) {

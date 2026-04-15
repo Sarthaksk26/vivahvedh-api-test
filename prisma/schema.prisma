@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +7,259 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// Enums for strict data validation (Better than Strings!)
-// ==========================================
+model User {
+  id                   String           @id @default(uuid())
+  regId                String           @unique
+  email                String?          @unique
+  mobile               String           @unique
+  password             String
+  role                 Role             @default(USER)
+  accountStatus        AccountStatus    @default(INACTIVE)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  paymentDone          Boolean          @default(false)
+  lastPaidOn           DateTime?
+  planType             PlanType         @default(FREE)
+  planExpiresAt        DateTime?
+  images               Image[]
+  pendingPayments      PendingPayment[]
+  profileViewsReceived ProfileView[]    @relation("ViewedProfile")
+  profileViewsSent     ProfileView[]    @relation("ViewerProfile")
+  receivedRequests     Request[]        @relation("ReceivedRequests")
+  sentRequests         Request[]        @relation("SentRequests")
+  shortlistedBy        Shortlist[]      @relation("ShortlistedBy")
+  shortlistedUsers     Shortlist[]      @relation("ShortlistedUsers")
+  addresses            UserAddress[]
+  astrology            UserAstrology?
+  education            UserEducation?
+  family               UserFamily?
+  physical             UserPhysical?
+  preferences          UserPreferences?
+  profile              UserProfile?
+
+  @@index([planType, createdAt(sort: Desc)])
+}
+
+model UserProfile {
+  id            String        @id @default(uuid())
+  userId        String        @unique
+  firstName     String
+  middleName    String?
+  lastName      String
+  gender        Gender
+  maritalStatus MaritalStatus
+  birthDateTime DateTime?
+  birthPlace    String?
+  aboutMe       String?
+  religionId    Int?
+  casteId       Int?
+  subCasteId    Int?
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([gender, maritalStatus])
+  @@index([casteId])
+}
+
+model UserPhysical {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  height     String?
+  weight     Int?
+  bloodGroup String?
+  complexion String?
+  health     String?
+  disease    String?
+  diet       String?
+  smoke      Boolean?
+  drink      Boolean?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserAstrology {
+  id        String  @id @default(uuid())
+  userId    String  @unique
+  gothra    String?
+  rashi     String?
+  nakshatra String?
+  charan    String?
+  nadi      String?
+  gan       String?
+  mangal    String?
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserEducation {
+  id                 String  @id @default(uuid())
+  userId             String  @unique
+  qualificationId    Int?
+  trade              String?
+  college            String?
+  jobBusiness        String?
+  jobAddress         String?
+  annualIncome       String?
+  specialAchievement String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserFamily {
+  id                String  @id @default(uuid())
+  userId            String  @unique
+  fatherName        String?
+  fatherOccupation  String?
+  motherName        String?
+  motherOccupation  String?
+  motherHometown    String?
+  maternalUncleName String?
+  brothers          Int     @default(0)
+  marriedBrothers   Int     @default(0)
+  sisters           Int     @default(0)
+  marriedSisters    Int     @default(0)
+  relativesSirnames String?
+  familyBackground  String?
+  familyWealth      String?
+  agricultureLand   String?
+  plot              String?
+  flat              String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreferences {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  expectations String?
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserAddress {
+  id          String  @id @default(uuid())
+  userId      String
+  addressType String
+  addressLine String?
+  talukaId    Int?
+  districtId  Int?
+  stateId     Int?
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Request {
+  id         String        @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  receiver   User          @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User          @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+}
+
+model Shortlist {
+  id           String   @id @default(uuid())
+  userId       String
+  targetUserId String
+  createdAt    DateTime @default(now())
+  target       User     @relation("ShortlistedBy", fields: [targetUserId], references: [id], onDelete: Cascade)
+  user         User     @relation("ShortlistedUsers", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetUserId])
+}
+
+model ProfileView {
+  id       String   @id @default(uuid())
+  viewerId String
+  viewedId String
+  viewedAt DateTime @default(now())
+  viewed   User     @relation("ViewedProfile", fields: [viewedId], references: [id], onDelete: Cascade)
+  viewer   User     @relation("ViewerProfile", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, viewedId])
+}
+
+model Enquiry {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String
+  email     String
+  mobile    String
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model PendingPayment {
+  id            String        @id @default(uuid())
+  userId        String
+  planType      PlanType
+  amount        Float
+  screenshotUrl String
+  transactionId String
+  status        PaymentStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, transactionId])
+}
+
+model Religion {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+}
+
+model Caste {
+  id         Int    @id @default(autoincrement())
+  religionId Int?
+  name       String
+}
+
+model SubCaste {
+  id      Int    @id @default(autoincrement())
+  casteId Int?
+  name    String
+}
+
+model State {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+}
+
+model District {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+}
+
+model Taluka {
+  id         Int    @id @default(autoincrement())
+  districtId Int?
+  name       String
+}
+
+model IncomeRange {
+  id    Int    @id @default(autoincrement())
+  range String @unique
+}
+
+model Qualification {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  group String?
+}
+
+model Occupation {
+  id   Int    @id @default(autoincrement())
+  type String @unique
+}
+
 enum Role {
   USER
   ADMIN
@@ -45,288 +292,14 @@ enum RequestStatus {
   WITHDRAWN
 }
 
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum PlanType {
   FREE
   SILVER
   GOLD
-}
-
-// ==========================================
-// Core User Models (Normalized Design)
-// ==========================================
-
-model User {
-  id              String        @id @default(uuid())
-  regId           String        @unique // Your old auto-generated ID (e.g. VV1234)
-  email           String?       @unique
-  mobile          String        @unique
-  password        String
-  role            Role          @default(USER)
-  accountStatus   AccountStatus @default(INACTIVE)
-  
-  // Timestamps (Auto-managed by Prisma)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Payment & Plan
-  paymentDone     Boolean       @default(false)
-  lastPaidOn      DateTime?
-  planType        PlanType      @default(FREE)
-  planExpiresAt   DateTime?
-
-  // Profile Parts (Splitting the massive "members" table)
-  profile         UserProfile?
-  physical        UserPhysical?
-  astrology       UserAstrology?
-  education       UserEducation?
-  family          UserFamily?
-  preferences     UserPreferences?
-  
-  // Array Relations
-  addresses       UserAddress[]
-  images          Image[]
-  
-  // Match Requests (Matches where this user sent or received the request)
-  sentRequests     Request[] @relation("SentRequests")
-  receivedRequests Request[] @relation("ReceivedRequests")
-
-  // Shortlist Relations
-  shortlistedBy    Shortlist[] @relation("ShortlistedBy")
-  shortlistedUsers Shortlist[] @relation("ShortlistedUsers")
-
-  // Profile View Relations
-  profileViewsReceived ProfileView[] @relation("ViewedProfile")
-  profileViewsSent     ProfileView[] @relation("ViewerProfile")
-}
-
-model UserProfile {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  firstName       String
-  middleName      String?
-  lastName        String
-  gender          Gender
-  maritalStatus   MaritalStatus
-  
-  birthDateTime   DateTime?
-  birthPlace      String?
-  
-  aboutMe         String?   @db.Text
-  
-  // Connecting to Lookups
-  religionId      Int?
-  casteId         Int?
-  subCasteId      Int?
-}
-
-model UserPhysical {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  height          Int?      // Stored as integer cm
-  weight          Int?      // Stored as integer kg
-  bloodGroup      String?
-  complexion      String?
-  health          String?
-  
-  diet            String?
-  smoke           Boolean?
-  drink           Boolean?
-}
-
-model UserAstrology {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  gothra          String?
-  rashi           String?
-  nakshatra       String?
-  charan          String?
-  nadi            String?
-  gan             String?
-  mangal          String?
-}
-
-model UserEducation {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  qualificationId Int?
-  trade           String?
-  college         String?   @db.Text
-  
-  jobBusiness     String?   @db.Text
-  jobAddress      String?   @db.Text
-  annualIncome    String?
-  
-  specialAchievement String? @db.Text
-}
-
-model UserFamily {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  fatherName      String?
-  fatherOccupation String?
-  motherName      String?
-  motherOccupation String?
-  motherHometown  String?
-  maternalUncleName String?
-  
-  brothers        Int       @default(0)
-  marriedBrothers Int       @default(0)
-  sisters         Int       @default(0)
-  marriedSisters  Int       @default(0)
-  
-  relativesSirnames String? @db.Text
-  familyBackground  String? @db.Text
-  
-  familyWealth    String?   @db.Text
-  agricultureLand String?
-  plot            String?
-  flat            String?
-}
-
-model UserPreferences {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  expectations    String?   @db.Text
-}
-
-model UserAddress {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  addressType     String    // e.g. 'PERMANENT', 'CURRENT'
-  addressLine     String?   @db.Text
-  
-  talukaId        Int?
-  districtId      Int?
-  stateId         Int?
-}
-
-model Image {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  url             String
-  isPrimary       Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-}
-
-model Request {
-  id              String        @id @default(uuid())
-  
-  senderId        String
-  sender          User          @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
-  
-  receiverId      String
-  receiver        User          @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
-  
-  status          RequestStatus @default(PENDING)
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@unique([senderId, receiverId]) // A user can only send one active request to another user
-}
-
-model Shortlist {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation("ShortlistedUsers", fields: [userId], references: [id], onDelete: Cascade)
-  
-  targetUserId    String
-  target          User      @relation("ShortlistedBy", fields: [targetUserId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
-
-  @@unique([userId, targetUserId])
-}
-
-model ProfileView {
-  id              String    @id @default(uuid())
-  viewerId        String
-  viewer          User      @relation("ViewerProfile", fields: [viewerId], references: [id], onDelete: Cascade)
-  
-  viewedId        String
-  viewed          User      @relation("ViewedProfile", fields: [viewedId], references: [id], onDelete: Cascade)
-  
-  viewedAt        DateTime  @default(now())
-
-  @@unique([viewerId, viewedId])
-}
-
-model Enquiry {
-  id              String    @id @default(uuid())
-  firstName       String
-  lastName        String
-  email           String
-  mobile          String
-  subject         String
-  message         String    @db.Text
-  createdAt       DateTime  @default(now())
-}
-
-// ==========================================
-// Lookup Tables (Usually populated by Admin)
-// ==========================================
-
-model Religion {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique
-}
-
-model Caste {
-  id              Int       @id @default(autoincrement())
-  religionId      Int?
-  name            String
-}
-
-model SubCaste {
-  id              Int       @id @default(autoincrement())
-  casteId         Int?
-  name            String
-}
-
-model State {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique
-}
-
-model District {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique
-}
-
-model Taluka {
-  id              Int       @id @default(autoincrement())
-  districtId      Int?
-  name            String
-}
-
-model IncomeRange {
-  id              Int       @id @default(autoincrement())
-  range           String    @unique
-}
-
-model Qualification {
-  id              Int       @id @default(autoincrement())
-  name            String    @unique
-  group           String?
-}
-
-model Occupation {
-  id              Int       @id @default(autoincrement())
-  type            String    @unique
 }
