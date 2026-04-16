@@ -132,3 +132,38 @@ export const sendEnquiryNotificationEmail = async (adminEmail: string, enquiry: 
   `;
   await sendMail(adminEmail, `[NEW ENQUIRY] ${enquiry.subject}`, html);
 };
+
+export const sendOfflineCredentialsEmail = async (to: string, name: string, regId: string, tempPassword: string) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 40px; max-width: 600px; margin: 0 auto;">
+      <div style="text-align: center; border-bottom: 3px solid #e11d48; padding-bottom: 20px; margin-bottom: 30px;">
+        <h1 style="color: #e11d48; margin-bottom: 5px;">Welcome to Vivahvedh! 🎉</h1>
+        <p style="color: #666; font-size: 14px;">Your profile has been created by our team</p>
+      </div>
+      
+      <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
+      <p>Your Vivahvedh matrimonial profile has been created successfully. Here are your login credentials:</p>
+      
+      <div style="background: #f8f9fa; border: 2px solid #e11d48; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+        <p style="margin: 0 0 12px;"><b style="color: #666;">Login ID (RegID):</b></p>
+        <p style="font-size: 24px; font-weight: bold; color: #e11d48; margin: 0 0 16px; letter-spacing: 2px;">${regId}</p>
+        <p style="margin: 0 0 12px;"><b style="color: #666;">Temporary Password:</b></p>
+        <p style="font-size: 20px; font-weight: bold; color: #333; margin: 0; font-family: monospace; background: #fff; display: inline-block; padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd;">${tempPassword}</p>
+      </div>
+      
+      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; border-radius: 4px; margin: 20px 0;">
+        <p style="margin: 0; font-weight: bold; color: #856404;">⚠️ Important: You MUST change your password upon your first login for security.</p>
+      </div>
+      
+      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/login" style="background-color: #e11d48; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; text-align: center;">
+        Login Now →
+      </a>
+      
+      <div style="margin-top: 40px; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
+        <p>If you did not request this account, please contact us immediately.</p>
+        <p>© ${new Date().getFullYear()} Vivahvedh Matrimonial</p>
+      </div>
+    </div>
+  `;
+  await sendMail(to, `Your Vivahvedh Login Credentials | ${regId}`, html);
+};

@@ -3,47 +3,69 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/db';
 import { z } from 'zod/v4';
+import { getJwtSecret } from '../config/env';
 import { sendWelcomeEmail } from '../services/mail.service';
+
+const PROFILE_CREATED_BY_OPTIONS = ['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau'] as const;
 
 // Zod Schema for strict validation
 const registerSchema = z.object({
   mobile: z.string().min(10).max(15),
   password: z.string().min(6),
-  firstName: z.string(),
-  lastName: z.string(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
-  email: z.string().email()
+  email: z.string().email(),
+  profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional()
 });
+
+/**
+ * Generate a collision-safe RegID with retry logic.
+ * Attempts up to 5 times before throwing.
+ */
+async function generateUniqueRegId(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const regId = `VV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const existing = await prisma.user.findUnique({ where: { regId } });
+    if (!existing) return regId;
+  }
+  throw new Error('Failed to generate a unique RegID after 5 attempts.');
+}
 
 export const register = async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
+    // Check if user already exists by mobile
+    const existingMobile = await prisma.user.findUnique({
       where: { mobile: validatedData.mobile }
     });
-
-    if (existingUser) {
+    if (existingMobile) {
       res.status(400).json({ error: 'User with this mobile number already exists.' });
       return;
     }
 
-    // Generate extremely fast hash
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
-    
-    // Auto-generate a beautiful distinct RegID (e.g. VV-123456)
-    const newRegId = `VV-${Math.floor(100000 + Math.random() * 900000)}`;
+    // Check if user already exists by email
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: validatedData.email }
+    });
+    if (existingEmail) {
+      res.status(400).json({ error: 'User with this email already exists.' });
+      return;
+    }
 
-    // Create User & Profile inside a Prisma Transaction for safety
+    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const newRegId = await generateUniqueRegId();
+
     const newUser = await prisma.user.create({
       data: {
         regId: newRegId,
         mobile: validatedData.mobile,
         email: validatedData.email,
         password: hashedPassword,
-        accountStatus: 'INACTIVE', // Safe default workflow
+        accountStatus: 'INACTIVE',
+        profileCreatedBy: validatedData.profileCreatedBy || null,
         profile: {
           create: {
             firstName: validatedData.firstName,
@@ -54,7 +76,7 @@ export const register = async (req: Request, res: Response) => {
         }
       },
       include: {
-        profile: true // Return the profile data we just created
+        profile: true
       }
     });
 
@@ -109,10 +131,16 @@ export const login = async (req: Request, res: Response) => {
       return;
     }
 
-    // Generate JWT specific to the user
+    // Generate JWT — includes requiresPasswordChange so frontend can redirect
     const token = jwt.sign(
-      { id: user.id, role: user.role, accountStatus: user.accountStatus, planType: user.planType },
-      process.env.JWT_SECRET || 'vivahvedh_super_secret_jwt_key_2026',
+      {
+        id: user.id,
+        role: user.role,
+        accountStatus: user.accountStatus,
+        planType: user.planType,
+        requiresPasswordChange: user.requiresPasswordChange
+      },
+      getJwtSecret(),
       { expiresIn: '7d' }
     );
 
@@ -122,7 +150,8 @@ export const login = async (req: Request, res: Response) => {
         regId: user.regId,
         role: user.role,
         status: user.accountStatus,
-        planType: user.planType
+        planType: user.planType,
+        requiresPasswordChange: user.requiresPasswordChange
       }
     });
 

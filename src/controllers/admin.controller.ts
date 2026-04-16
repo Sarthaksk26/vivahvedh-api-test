@@ -1,6 +1,21 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import prisma from '../config/db';
-import { sendApprovalEmail } from '../services/mail.service';
+import { z } from 'zod/v4';
+import { sendApprovalEmail, sendOfflineCredentialsEmail } from '../services/mail.service';
+
+/**
+ * Generate a collision-safe RegID with retry logic.
+ */
+async function generateUniqueRegId(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const regId = `VV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const existing = await prisma.user.findUnique({ where: { regId } });
+    if (!existing) return regId;
+  }
+  throw new Error('Failed to generate a unique RegID after 5 attempts.');
+}
 
 export const getPendingApprovals = async (req: Request, res: Response) => {
   try {
@@ -18,7 +33,7 @@ export const getPendingApprovals = async (req: Request, res: Response) => {
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const allUsers = await prisma.user.findMany({
-      where: { accountStatus: { in: ['ACTIVE', 'INACTIVE'] } },
+      where: { accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
       include: { profile: true },
       orderBy: { createdAt: 'desc' }
     });
@@ -31,6 +46,13 @@ export const getAllUsers = async (req: Request, res: Response) => {
 export const approveUser = async (req: Request, res: Response) => {
   try {
     const { targetUserId } = req.body;
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: targetUserId },
       data: { accountStatus: 'ACTIVE' },
@@ -52,11 +74,11 @@ export const banUser = async (req: Request, res: Response) => {
     const { targetUserId } = req.body;
     await prisma.user.update({
       where: { id: targetUserId },
-      data: { accountStatus: 'INACTIVE' }
+      data: { accountStatus: 'SUSPENDED' }
     });
-    res.status(200).json({ message: 'User frozen/banned.' });
+    res.status(200).json({ message: 'User suspended.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to ban user' });
+    res.status(500).json({ error: 'Failed to suspend user' });
   }
 };
 
@@ -113,5 +135,89 @@ export const setUserPlan = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Set Plan Error:", error);
     res.status(500).json({ error: 'Failed to set user plan' });
+  }
+};
+
+// ===========================
+// NEW: Admin creates offline user
+// ===========================
+const createOfflineUserSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  mobile: z.string().min(10).max(15),
+  email: z.string().email(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
+  maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
+  profileCreatedBy: z.enum(['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau']).optional()
+});
+
+export const createOfflineUser = async (req: Request, res: Response) => {
+  try {
+    const validatedData = createOfflineUserSchema.parse(req.body);
+
+    // Check for existing mobile
+    const existingMobile = await prisma.user.findUnique({ where: { mobile: validatedData.mobile } });
+    if (existingMobile) {
+      res.status(400).json({ error: 'A user with this mobile number already exists.' });
+      return;
+    }
+
+    // Check for existing email
+    const existingEmail = await prisma.user.findUnique({ where: { email: validatedData.email } });
+    if (existingEmail) {
+      res.status(400).json({ error: 'A user with this email already exists.' });
+      return;
+    }
+
+    // Generate secure temporary password (12 chars, alphanumeric)
+    const tempPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12);
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Generate collision-safe RegID
+    const newRegId = await generateUniqueRegId();
+
+    // Create the user — bypasses OTP, auto-activated, flagged for password change
+    const newUser = await prisma.user.create({
+      data: {
+        regId: newRegId,
+        mobile: validatedData.mobile,
+        email: validatedData.email,
+        password: hashedPassword,
+        accountStatus: 'ACTIVE',
+        requiresPasswordChange: true,
+        profileCreatedBy: validatedData.profileCreatedBy || 'Marriage Bureau',
+        profile: {
+          create: {
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            gender: validatedData.gender,
+            maritalStatus: validatedData.maritalStatus
+          }
+        }
+      },
+      include: { profile: true }
+    });
+
+    // Send credentials email — password is NEVER returned in the API response
+    sendOfflineCredentialsEmail(
+      validatedData.email,
+      validatedData.firstName,
+      newRegId,
+      tempPassword
+    );
+
+    res.status(201).json({
+      message: `Profile created successfully. Login credentials have been sent to ${validatedData.email}.`,
+      regId: newUser.regId,
+      userName: `${validatedData.firstName} ${validatedData.lastName}`
+    });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.issues });
+      return;
+    }
+    console.error("Create Offline User Error:", error);
+    res.status(500).json({ error: 'Failed to create offline user profile.' });
   }
 };
