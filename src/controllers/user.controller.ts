@@ -48,7 +48,7 @@ export const uploadPhoto = async (req: Request, res: Response) => {
 
     const userId = req.user.id;
     // Construct the public URL that the frontend will use to display it
-    const photoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const photoUrl = `${process.env.API_URL || 'http://localhost:5000'}/uploads/${req.file.filename}`;
 
     // Check how many photos already exist
     const existingCount = await prisma.image.count({ where: { userId } });
@@ -219,7 +219,10 @@ export const changePassword = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword }
+      data: {
+        password: hashedPassword,
+        requiresPasswordChange: false
+      }
     });
 
     res.status(200).json({ success: true, message: 'Password changed successfully.' });

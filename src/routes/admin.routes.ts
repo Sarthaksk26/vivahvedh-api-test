@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPendingApprovals, getAllUsers, approveUser, banUser, deleteUser, getEnquiries, setUserPlan } from '../controllers/admin.controller';
+import { getPendingApprovals, getAllUsers, approveUser, banUser, deleteUser, getEnquiries, setUserPlan, createOfflineUser } from '../controllers/admin.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -24,5 +24,9 @@ router.get('/enquiries', requireAuth, requireAdmin, getEnquiries);
 
 // Set user plan (FREE / SILVER / GOLD)
 router.post('/set-plan', requireAuth, requireAdmin, setUserPlan);
+
+// @route   POST /api/admin/users/create
+// @desc    Admin creates a profile for an offline/walk-in customer
+router.post('/users/create', requireAuth, requireAdmin, createOfflineUser);
 
 export default router;
