@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
-import { upload } from '../config/multer';
+import { upload, processImage } from '../config/multer';
 import {
   getApprovedStories,
   submitStory,
@@ -17,7 +17,7 @@ const router = Router();
 router.get('/', getApprovedStories);
 
 // USER: Submit a story (with optional photo)
-router.post('/submit', requireAuth, upload.single('photo'), submitStory);
+router.post('/submit', requireAuth, upload.single('photo'), processImage, submitStory);
 
 // ADMIN: Get pending stories for review
 router.get('/admin/pending', requireAuth, requireAdmin, getPendingStories);
@@ -29,7 +29,7 @@ router.get('/admin/all', requireAuth, requireAdmin, getAllStories);
 router.post('/admin/review', requireAuth, requireAdmin, reviewStory);
 
 // ADMIN: Create a story directly (auto-approved)
-router.post('/admin/create', requireAuth, requireAdmin, upload.single('photo'), createStory);
+router.post('/admin/create', requireAuth, requireAdmin, upload.single('photo'), processImage, createStory);
 
 // ADMIN: Delete a story
 router.delete('/admin/:id', requireAuth, requireAdmin, deleteStory);

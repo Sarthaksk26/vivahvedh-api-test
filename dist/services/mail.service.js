@@ -1,45 +1,57 @@
-import nodemailer from 'nodemailer';
-
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendEnquiryReplyEmail = exports.sendOfflineCredentialsEmail = exports.sendEnquiryNotificationEmail = exports.sendPaymentStatusEmail = exports.sendConnectionAcceptedEmail = exports.sendConnectionRequestEmail = exports.sendApprovalEmail = exports.sendWelcomeEmail = exports.sendMail = void 0;
+const nodemailer_1 = __importDefault(require("nodemailer"));
 // Create a reusable transporter using exactly what we specify in .env
 // We default to a silent fail-catcher if env variables are missing so the app doesn't crash during development
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || '', 
-    pass: process.env.SMTP_PASS || '', 
-  },
-  connectionTimeout: 5000, // 5 seconds
-  greetingTimeout: 5000,   // 5 seconds
-  socketTimeout: 5000,     // 5 seconds
+const transporter = nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || '',
+    },
+    connectionTimeout: 5000, // 5 seconds
+    greetingTimeout: 5000, // 5 seconds
+    socketTimeout: 5000, // 5 seconds
 });
-
-export const sendMail = async (to: string, subject: string, htmlContent: string) => {
-  if (!process.env.SMTP_USER) {
-    console.warn(`⚠️ Mail Module Skipped: SMTP_USER not configured. Would have sent "${subject}" to ${to}`);
-    return;
-  }
-
-  try {
-    const info = await transporter.sendMail({
-      from: `"Vivahvedh Matrimony" <${process.env.SMTP_USER}>`,
-      to,
-      subject,
-      html: htmlContent,
-    });
-    console.log(`✉️ Email securely sent: [${info.messageId}] to ${to}`);
-  } catch (error) {
-    console.error('❌ Failed to route email:', error);
-  }
-};
-
+const sendMail = (to, subject, htmlContent) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!process.env.SMTP_USER) {
+        console.warn(`⚠️ Mail Module Skipped: SMTP_USER not configured. Would have sent "${subject}" to ${to}`);
+        return;
+    }
+    try {
+        const info = yield transporter.sendMail({
+            from: `"Vivahvedh Matrimony" <${process.env.SMTP_USER}>`,
+            to,
+            subject,
+            html: htmlContent,
+        });
+        console.log(`✉️ Email securely sent: [${info.messageId}] to ${to}`);
+    }
+    catch (error) {
+        console.error('❌ Failed to route email:', error);
+    }
+});
+exports.sendMail = sendMail;
 // =====================================
 // High-Impact Email Templates
 // =====================================
-
-export const sendWelcomeEmail = async (to: string, name: string) => {
-  const html = `
+const sendWelcomeEmail = (to, name) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">Welcome to Vivahvedh!</h1>
       <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
@@ -50,11 +62,11 @@ export const sendWelcomeEmail = async (to: string, name: string) => {
       </div>
     </div>
   `;
-  await sendMail(to, "Welcome to Vivahvedh Matrimony!", html);
-};
-
-export const sendApprovalEmail = async (to: string, name: string) => {
-  const html = `
+    yield (0, exports.sendMail)(to, "Welcome to Vivahvedh Matrimony!", html);
+});
+exports.sendWelcomeEmail = sendWelcomeEmail;
+const sendApprovalEmail = (to, name) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Profile Approved! ✅</h1>
       <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
@@ -65,11 +77,11 @@ export const sendApprovalEmail = async (to: string, name: string) => {
       </a>
     </div>
   `;
-  await sendMail(to, "Your Profile is Now Active! | Vivahvedh", html);
-};
-
-export const sendConnectionRequestEmail = async (to: string, receiverName: string, senderName: string) => {
-  const html = `
+    yield (0, exports.sendMail)(to, "Your Profile is Now Active! | Vivahvedh", html);
+});
+exports.sendApprovalEmail = sendApprovalEmail;
+const sendConnectionRequestEmail = (to, receiverName, senderName) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">New Match Interest! ❤️</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
@@ -80,11 +92,11 @@ export const sendConnectionRequestEmail = async (to: string, receiverName: strin
       </a>
     </div>
   `;
-  await sendMail(to, `New Interest from ${senderName}`, html);
-};
-
-export const sendConnectionAcceptedEmail = async (to: string, receiverName: string, accepterName: string) => {
-  const html = `
+    yield (0, exports.sendMail)(to, `New Interest from ${senderName}`, html);
+});
+exports.sendConnectionRequestEmail = sendConnectionRequestEmail;
+const sendConnectionAcceptedEmail = (to, receiverName, accepterName) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Request Accepted! 🎉</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
@@ -95,29 +107,29 @@ export const sendConnectionAcceptedEmail = async (to: string, receiverName: stri
       </a>
     </div>
   `;
-  await sendMail(to, `${accepterName} Accepted Your Request!`, html);
-};
-export const sendPaymentStatusEmail = async (to: string, name: string, plan: string, status: 'APPROVED' | 'REJECTED') => {
-  const isApproved = status === 'APPROVED';
-  const html = `
+    yield (0, exports.sendMail)(to, `${accepterName} Accepted Your Request!`, html);
+});
+exports.sendConnectionAcceptedEmail = sendConnectionAcceptedEmail;
+const sendPaymentStatusEmail = (to, name, plan, status) => __awaiter(void 0, void 0, void 0, function* () {
+    const isApproved = status === 'APPROVED';
+    const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid ${isApproved ? '#16a34a' : '#dc2626'};">
       <h1 style="color: ${isApproved ? '#16a34a' : '#dc2626'};">Payment ${status}! ${isApproved ? '🎉' : '⚠️'}</h1>
       <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
       <p>Your payment submission for the <b>${plan} Plan</b> has been ${status.toLowerCase()}.</p>
-      ${isApproved 
+      ${isApproved
         ? `<p>Your account features have been upgraded immediately. You now have full access according to your plan.</p>`
-        : `<p>Unfortunately, your transaction could not be verified. Please ensure the transaction ID is correct and the screenshot is clear, then try again.</p>`
-      }
+        : `<p>Unfortunately, your transaction could not be verified. Please ensure the transaction ID is correct and the screenshot is clear, then try again.</p>`}
       <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
   `;
-  await sendMail(to, `Payment ${status} | Vivahvedh Matrimony`, html);
-};
-
-export const sendEnquiryNotificationEmail = async (adminEmail: string, enquiry: any) => {
-  const html = `
+    yield (0, exports.sendMail)(to, `Payment ${status} | Vivahvedh Matrimony`, html);
+});
+exports.sendPaymentStatusEmail = sendPaymentStatusEmail;
+const sendEnquiryNotificationEmail = (adminEmail, enquiry) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
       <h2 style="color: #e11d48; border-bottom: 2px solid #eee; padding-bottom: 10px;">New Enquiry Received</h2>
       <p><b>From:</b> ${enquiry.firstName} ${enquiry.lastName}</p>
@@ -130,11 +142,11 @@ export const sendEnquiryNotificationEmail = async (adminEmail: string, enquiry: 
       </div>
     </div>
   `;
-  await sendMail(adminEmail, `[NEW ENQUIRY] ${enquiry.subject}`, html);
-};
-
-export const sendOfflineCredentialsEmail = async (to: string, name: string, regId: string, tempPassword: string) => {
-  const html = `
+    yield (0, exports.sendMail)(adminEmail, `[NEW ENQUIRY] ${enquiry.subject}`, html);
+});
+exports.sendEnquiryNotificationEmail = sendEnquiryNotificationEmail;
+const sendOfflineCredentialsEmail = (to, name, regId, tempPassword) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; color: #333; padding: 40px; max-width: 600px; margin: 0 auto;">
       <div style="text-align: center; border-bottom: 3px solid #e11d48; padding-bottom: 20px; margin-bottom: 30px;">
         <h1 style="color: #e11d48; margin-bottom: 5px;">Welcome to Vivahvedh! 🎉</h1>
@@ -165,11 +177,11 @@ export const sendOfflineCredentialsEmail = async (to: string, name: string, regI
       </div>
     </div>
   `;
-  await sendMail(to, `Your Vivahvedh Login Credentials | ${regId}`, html);
-};
-
-export const sendEnquiryReplyEmail = async (to: string, name: string, originalMessage: string, replyMessage: string) => {
-  const html = `
+    yield (0, exports.sendMail)(to, `Your Vivahvedh Login Credentials | ${regId}`, html);
+});
+exports.sendOfflineCredentialsEmail = sendOfflineCredentialsEmail;
+const sendEnquiryReplyEmail = (to, name, originalMessage, replyMessage) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
     <div style="font-family: Arial, sans-serif; color: #333; padding: 30px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
       <h2 style="color: #e11d48; margin-bottom: 20px;">Support Reply | Vivahvedh</h2>
       <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
@@ -189,5 +201,6 @@ export const sendEnquiryReplyEmail = async (to: string, name: string, originalMe
       </div>
     </div>
   `;
-  await sendMail(to, `Re: Your Enquiry to Vivahvedh`, html);
-};
+    yield (0, exports.sendMail)(to, `Re: Your Enquiry to Vivahvedh`, html);
+});
+exports.sendEnquiryReplyEmail = sendEnquiryReplyEmail;
