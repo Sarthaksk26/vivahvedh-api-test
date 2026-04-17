@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import prisma from '../config/db';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 import { sendApprovalEmail, sendOfflineCredentialsEmail } from '../services/mail.service';
 
 /**
