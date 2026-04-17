@@ -5,7 +5,7 @@ import { maskPrivateDetails } from '../utils/sanitize';
 export const executeSearch = async (req: Request, res: Response) => {
   try {
     // Extract search filters from query parameters
-    const { gender, maritalStatus, casteId, q } = req.query;
+    const { gender, maritalStatus, casteId, q, page = '1', limit = '20' } = req.query;
 
     let profileFilters: any = {};
 
@@ -33,6 +33,14 @@ export const executeSearch = async (req: Request, res: Response) => {
       ];
     }
 
+    const pageNumber = parseInt(String(page)) || 1;
+    const pageSize = parseInt(String(limit)) || 20;
+    const skip = (pageNumber - 1) * pageSize;
+
+    // Get total count for pagination
+    const totalResults = await prisma.user.count({ where: baseWhere });
+    const totalPages = Math.ceil(totalResults / pageSize);
+
     // Gold users appear first (priority listing)
     const matches = await prisma.user.findMany({
       where: baseWhere,
@@ -49,7 +57,8 @@ export const executeSearch = async (req: Request, res: Response) => {
         { planType: 'desc' }, // GOLD > SILVER > FREE
         { createdAt: 'desc' }
       ],
-      take: 50
+      skip,
+      take: pageSize
     });
 
     // Strip out sensitive base user fields before sending
@@ -65,7 +74,15 @@ export const executeSearch = async (req: Request, res: Response) => {
       return safeQuery;
     });
 
-    res.status(200).json({ results: safeMatches });
+    res.status(200).json({ 
+      results: safeMatches,
+      pagination: {
+        currentPage: pageNumber,
+        totalPages,
+        totalResults,
+        pageSize
+      }
+    });
 
   } catch (error) {
     console.error("Matchmaking Error:", error);

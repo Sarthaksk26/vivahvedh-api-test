@@ -5,12 +5,12 @@ import {
   getProfileViewers 
 } from '../controllers/user.controller';
 import { requireAuth } from '../middleware/auth.middleware';
-import { upload } from '../config/multer';
+import { upload, processImage } from '../config/multer';
 
 const router = Router();
 
 router.get('/profile', requireAuth, getMyProfile);
-router.post('/upload-photo', requireAuth, upload.single('photo'), uploadPhoto);
+router.post('/upload-photo', requireAuth, upload.single('photo'), processImage, uploadPhoto);
 router.delete('/delete-photo/:imageId', requireAuth, deletePhoto);
 router.patch('/update', requireAuth, updateProfile);
 router.post('/change-password', requireAuth, changePassword);

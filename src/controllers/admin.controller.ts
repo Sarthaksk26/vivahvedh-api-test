@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import prisma from '../config/db';
 import { z } from 'zod';
-import { sendApprovalEmail, sendOfflineCredentialsEmail } from '../services/mail.service';
+import { sendApprovalEmail, sendOfflineCredentialsEmail, sendEnquiryReplyEmail } from '../services/mail.service';
 
 /**
  * Generate a collision-safe RegID with retry logic.
@@ -131,6 +131,55 @@ export const getEnquiries = async (req: Request, res: Response) => {
     res.status(200).json(enquiries);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch enquiries' });
+  }
+};
+
+export const replyToEnquiry = async (req: Request, res: Response) => {
+  try {
+    const { enquiryId, replyMessage } = req.body;
+    if (!enquiryId || !replyMessage) {
+      res.status(400).json({ error: 'enquiryId and replyMessage are required' });
+      return;
+    }
+
+    const enquiry = await prisma.enquiry.findUnique({ where: { id: enquiryId } });
+    if (!enquiry) {
+      res.status(404).json({ error: 'Enquiry not found' });
+      return;
+    }
+
+    // Send the email
+    await sendEnquiryReplyEmail(enquiry.email, enquiry.firstName, enquiry.message, replyMessage);
+
+    // Mark as resolved
+    await prisma.enquiry.update({
+      where: { id: enquiryId },
+      data: { isResolved: true }
+    });
+
+    res.status(200).json({ message: 'Reply sent successfully and enquiry marked as resolved.' });
+  } catch (error) {
+    console.error('Reply Enquiry Error:', error);
+    res.status(500).json({ error: 'Failed to reply to enquiry' });
+  }
+};
+
+export const markEnquiryResolved = async (req: Request, res: Response) => {
+  try {
+    const { enquiryId, isResolved } = req.body;
+    if (!enquiryId) {
+      res.status(400).json({ error: 'enquiryId is required' });
+      return;
+    }
+
+    await prisma.enquiry.update({
+      where: { id: enquiryId },
+      data: { isResolved: !!isResolved }
+    });
+
+    res.status(200).json({ message: 'Enquiry status updated successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update enquiry status' });
   }
 };
 

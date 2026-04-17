@@ -188,14 +188,15 @@ model ProfileView {
 }
 
 model Enquiry {
-  id        String   @id @default(uuid())
-  firstName String
-  lastName  String
-  email     String
-  mobile    String
-  subject   String
-  message   String
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  firstName  String
+  lastName   String
+  email      String
+  mobile     String
+  subject    String
+  message    String
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 model PendingPayment {
