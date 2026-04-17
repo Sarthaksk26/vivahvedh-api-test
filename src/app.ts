@@ -10,6 +10,7 @@ import adminRoutes from './routes/admin.routes';
 import connectionRoutes from './routes/connection.routes';
 import publicRoutes from './routes/public.routes';
 import paymentRoutes from './routes/payment.routes';
+import storyRoutes from './routes/story.routes';
 const app = express();
 
 // Security Middleware
@@ -39,6 +40,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/stories', storyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -71,20 +71,49 @@ export const approveUser = async (req: Request, res: Response) => {
 
 export const banUser = async (req: Request, res: Response) => {
   try {
-    const { targetUserId } = req.body;
+    const { targetUserId, action } = req.body;
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    // Prevent admin from banning themselves
+    if (req.user?.id === targetUserId) {
+      res.status(400).json({ error: 'You cannot suspend your own account.' });
+      return;
+    }
+
+    // Support toggle: ban or unban
+    const newStatus = action === 'unban' ? 'ACTIVE' : 'SUSPENDED';
     await prisma.user.update({
       where: { id: targetUserId },
-      data: { accountStatus: 'SUSPENDED' }
+      data: { accountStatus: newStatus }
     });
-    res.status(200).json({ message: 'User suspended.' });
+
+    res.status(200).json({ message: newStatus === 'ACTIVE' ? 'User reactivated.' : 'User suspended.' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to suspend user' });
+    res.status(500).json({ error: 'Failed to update user status' });
   }
 };
 
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Prevent admin from deleting themselves
+    if (req.user?.id === id) {
+      res.status(400).json({ error: 'You cannot delete your own account.' });
+      return;
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: String(id) } });
+    if (!targetUser) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
     await prisma.user.delete({
       where: { id: String(id) }
     });

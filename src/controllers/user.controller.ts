@@ -48,7 +48,8 @@ export const uploadPhoto = async (req: Request, res: Response) => {
 
     const userId = req.user.id;
     // Construct the public URL that the frontend will use to display it
-    const photoUrl = `${process.env.API_URL || 'http://localhost:5000'}/uploads/${req.file.filename}`;
+    // Store only the relative path for environment portability
+    const photoUrl = `/uploads/${req.file.filename}`;
 
     // Check how many photos already exist
     const existingCount = await prisma.image.count({ where: { userId } });

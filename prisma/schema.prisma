@@ -262,6 +262,24 @@ model Occupation {
   type String @unique
 }
 
+model SuccessStory {
+  id          String      @id @default(uuid())
+  groomName   String
+  brideName   String
+  message     String      @db.Text
+  photoUrl    String?
+  status      StoryStatus @default(PENDING)
+  submittedBy String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+enum StoryStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum Role {
   USER
   ADMIN

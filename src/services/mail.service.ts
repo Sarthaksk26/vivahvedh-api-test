@@ -60,7 +60,7 @@ export const sendApprovalEmail = async (to: string, name: string) => {
       <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
       <p>Incredible news! The Vivahvedh moderation team has approved your profile.</p>
       <p>Your profile is now <b>Active</b> and completely searchable by thousands of other network members.</p>
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
@@ -75,7 +75,7 @@ export const sendConnectionRequestEmail = async (to: string, receiverName: strin
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Someone has noticed you! <b>${senderName}</b> has expressed interest in your profile.</p>
       <p>Log in now to view their profile details and decide if you want to connect.</p>
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Request
       </a>
     </div>
@@ -90,7 +90,7 @@ export const sendConnectionAcceptedEmail = async (to: string, receiverName: stri
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Great news! <b>${accepterName}</b> has accepted your connection request.</p>
       <p>You can now view their direct contact information and initiate communication.</p>
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Connected Match
       </a>
     </div>
@@ -155,7 +155,7 @@ export const sendOfflineCredentialsEmail = async (to: string, name: string, regI
         <p style="margin: 0; font-weight: bold; color: #856404;">⚠️ Important: You MUST change your password upon your first login for security.</p>
       </div>
       
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/login" style="background-color: #e11d48; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; text-align: center;">
+      <a href="${process.env.CLIENT_URL || '#'}/login" style="background-color: #e11d48; color: white; padding: 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; text-align: center;">
         Login Now →
       </a>
       
