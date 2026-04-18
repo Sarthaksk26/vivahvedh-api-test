@@ -17,38 +17,37 @@ const public_routes_1 = __importDefault(require("./routes/public.routes"));
 const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const story_routes_1 = __importDefault(require("./routes/story.routes"));
 const app = (0, express_1.default)();
-// Trust proxy for Render deployment to allow rate-limiting
+// 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
 app.set('trust proxy', 1);
-// Security Middleware
-app.use((0, helmet_1.default)({
-    crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving uploads to other origins
-}));
+// 2. Global Security & CORS (MUST be before any routes)
 app.use((0, cors_1.default)());
-app.use(express_1.default.json({ limit: '1mb' })); // Prevent large JSON payload DoS
-// Global Rate Limiting
+app.use((0, helmet_1.default)({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(express_1.default.json({ limit: '1mb' }));
+// 3. Basic Health Checks (Publicly accessible)
+app.get('/', (req, res) => res.status(200).send('Vivahvedh API is live.'));
+app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
+// 4. Rate Limiting
 const globalLimiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: { error: 'Too many requests from this IP, please try again later.' }
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { error: 'Too many requests.' }
 });
 app.use('/api', globalLimiter);
-// Path import fix for uploads
-// import path from 'path'; // moved to top
-// Rate Limiting for Auth routes
 const authLimiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // limit each IP to 20 requests per windowMs
-    message: { error: 'Too many authentication attempts. Please try again later.' }
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many auth attempts.' }
 });
-app.use('/api/auth', authLimiter);
-// Publicly expose the 'uploads' folder mapping from the exact filepath
+// 5. Static Files
 const UPLOADS_PATH = path_1.default.join(process.cwd(), 'uploads');
 app.use('/uploads', (req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
 }, express_1.default.static(UPLOADS_PATH));
-// Routes
-app.use('/api/auth', auth_routes_1.default);
+// 6. API Routes
+app.use('/api/auth', authLimiter, auth_routes_1.default);
 app.use('/api/user', user_routes_1.default);
 app.use('/api/search', search_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
@@ -56,8 +55,9 @@ app.use('/api/public', public_routes_1.default);
 app.use('/api/connections', connection_routes_1.default);
 app.use('/api/payments', payment_routes_1.default);
 app.use('/api/stories', story_routes_1.default);
-// Health check
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'API is running optimally.' });
+// 7. 404 Handler (Catch-all)
+app.use((req, res) => {
+    console.log(`404 at: ${req.originalUrl}`);
+    res.status(404).json({ error: `Path ${req.originalUrl} not found.` });
 });
 exports.default = app;
