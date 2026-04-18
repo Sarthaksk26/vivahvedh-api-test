@@ -13,6 +13,9 @@ import paymentRoutes from './routes/payment.routes';
 import storyRoutes from './routes/story.routes';
 const app = express();
 
+// Trust proxy for Render deployment to allow rate-limiting
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving uploads to other origins

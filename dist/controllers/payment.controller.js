@@ -43,7 +43,7 @@ const verifyPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 planType,
                 amount: parseFloat(amount),
                 transactionId,
-                screenshotUrl: file.filename,
+                screenshotUrl: `/uploads/${file.filename}`,
                 status: 'PENDING',
             },
         });
