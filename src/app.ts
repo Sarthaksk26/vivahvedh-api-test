@@ -40,7 +40,11 @@ const authLimiter = rateLimit({
 app.use('/api/auth', authLimiter);
 
 // Publicly expose the 'uploads' folder mapping from the exact filepath
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const UPLOADS_PATH = path.join(process.cwd(), 'uploads');
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(UPLOADS_PATH));
 
 // Routes
 app.use('/api/auth', authRoutes);
