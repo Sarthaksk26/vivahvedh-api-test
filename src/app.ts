@@ -13,44 +13,43 @@ import paymentRoutes from './routes/payment.routes';
 import storyRoutes from './routes/story.routes';
 const app = express();
 
-// Trust proxy for Render deployment to allow rate-limiting
+// 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
 app.set('trust proxy', 1);
 
-// Security Middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving uploads to other origins
-}));
+// 2. Global Security & CORS (MUST be before any routes)
 app.use(cors());
-app.use(express.json({ limit: '1mb' })); // Prevent large JSON payload DoS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(express.json({ limit: '1mb' }));
 
-// Global Rate Limiting
+// 3. Basic Health Checks (Publicly accessible)
+app.get('/', (req, res) => res.status(200).send('Vivahvedh API is live.'));
+app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
+
+// 4. Rate Limiting
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: { error: 'Too many requests from this IP, please try again later.' }
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests.' }
 });
 app.use('/api', globalLimiter);
 
-// Path import fix for uploads
-// import path from 'path'; // moved to top
-
-// Rate Limiting for Auth routes
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each IP to 20 requests per windowMs
-  message: { error: 'Too many authentication attempts. Please try again later.' }
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many auth attempts.' }
 });
-app.use('/api/auth', authLimiter);
 
-// Publicly expose the 'uploads' folder mapping from the exact filepath
+// 5. Static Files
 const UPLOADS_PATH = path.join(process.cwd(), 'uploads');
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 }, express.static(UPLOADS_PATH));
 
-// Routes
-app.use('/api/auth', authRoutes);
+// 6. API Routes
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/admin', adminRoutes);
@@ -59,9 +58,10 @@ app.use('/api/connections', connectionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/stories', storyRoutes);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'API is running optimally.' });
+// 7. 404 Handler (Catch-all)
+app.use((req, res) => {
+  console.log(`404 at: ${req.originalUrl}`);
+  res.status(404).json({ error: `Path ${req.originalUrl} not found.` });
 });
 
 export default app;
