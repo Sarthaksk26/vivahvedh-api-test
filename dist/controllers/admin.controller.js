@@ -74,7 +74,7 @@ const approveUser = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             include: { profile: true }
         });
         if (updatedUser.email && updatedUser.profile) {
-            (0, mail_service_1.sendApprovalEmail)(updatedUser.email, updatedUser.profile.firstName);
+            (0, mail_service_1.sendApprovalEmail)(updatedUser.email, updatedUser.profile.firstName, updatedUser.regId);
         }
         res.status(200).json({ message: 'User approved successfully', user: updatedUser });
     }
@@ -236,6 +236,7 @@ const createOfflineUserSchema = zod_1.z.object({
 const createOfflineUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const validatedData = createOfflineUserSchema.parse(req.body);
+        const emailLower = validatedData.email.toLowerCase();
         // Check for existing mobile
         const existingMobile = yield db_1.default.user.findUnique({ where: { mobile: validatedData.mobile } });
         if (existingMobile) {
@@ -243,7 +244,7 @@ const createOfflineUser = (req, res) => __awaiter(void 0, void 0, void 0, functi
             return;
         }
         // Check for existing email
-        const existingEmail = yield db_1.default.user.findUnique({ where: { email: validatedData.email } });
+        const existingEmail = yield db_1.default.user.findUnique({ where: { email: emailLower } });
         if (existingEmail) {
             res.status(400).json({ error: 'A user with this email already exists.' });
             return;
@@ -258,7 +259,7 @@ const createOfflineUser = (req, res) => __awaiter(void 0, void 0, void 0, functi
             data: {
                 regId: newRegId,
                 mobile: validatedData.mobile,
-                email: validatedData.email,
+                email: emailLower,
                 password: hashedPassword,
                 accountStatus: 'ACTIVE',
                 requiresPasswordChange: true,
@@ -275,7 +276,7 @@ const createOfflineUser = (req, res) => __awaiter(void 0, void 0, void 0, functi
             include: { profile: true }
         });
         // Send credentials email — password is NEVER returned in the API response
-        (0, mail_service_1.sendOfflineCredentialsEmail)(validatedData.email, validatedData.firstName, newRegId, tempPassword);
+        (0, mail_service_1.sendOfflineCredentialsEmail)(emailLower, validatedData.firstName, newRegId, tempPassword);
         res.status(201).json({
             message: `Profile created successfully. Login credentials have been sent to ${validatedData.email}.`,
             regId: newUser.regId,

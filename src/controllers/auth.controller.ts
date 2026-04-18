@@ -37,6 +37,8 @@ export const register = async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
 
+    const emailLower = validatedData.email.toLowerCase();
+
     // Check if user already exists by mobile
     const existingMobile = await prisma.user.findUnique({
       where: { mobile: validatedData.mobile }
@@ -48,7 +50,7 @@ export const register = async (req: Request, res: Response) => {
 
     // Check if user already exists by email
     const existingEmail = await prisma.user.findUnique({
-      where: { email: validatedData.email }
+      where: { email: emailLower }
     });
     if (existingEmail) {
       res.status(400).json({ error: 'User with this email already exists.' });
@@ -62,7 +64,7 @@ export const register = async (req: Request, res: Response) => {
       data: {
         regId: newRegId,
         mobile: validatedData.mobile,
-        email: validatedData.email,
+        email: emailLower,
         password: hashedPassword,
         accountStatus: 'INACTIVE',
         profileCreatedBy: validatedData.profileCreatedBy || null,
@@ -80,8 +82,8 @@ export const register = async (req: Request, res: Response) => {
       }
     });
 
-    if (validatedData.email) {
-      sendWelcomeEmail(validatedData.email, validatedData.firstName);
+    if (emailLower) {
+      sendWelcomeEmail(emailLower, validatedData.firstName, newRegId);
     }
 
     res.status(201).json({
@@ -108,13 +110,15 @@ export const login = async (req: Request, res: Response) => {
       return;
     }
 
+    const idLower = identifier.trim().toLowerCase();
+
     // Omni-Login Logic
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { mobile: identifier },
-          { email: identifier },
-          { regId: identifier }
+          { email: idLower },
+          { regId: identifier.toUpperCase() }
         ]
       }
     });

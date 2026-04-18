@@ -60,7 +60,7 @@ export const approveUser = async (req: Request, res: Response) => {
     });
 
     if (updatedUser.email && updatedUser.profile) {
-      sendApprovalEmail(updatedUser.email, updatedUser.profile.firstName);
+      sendApprovalEmail(updatedUser.email, updatedUser.profile.firstName, updatedUser.regId);
     }
 
     res.status(200).json({ message: 'User approved successfully', user: updatedUser });
@@ -232,6 +232,7 @@ const createOfflineUserSchema = z.object({
 export const createOfflineUser = async (req: Request, res: Response) => {
   try {
     const validatedData = createOfflineUserSchema.parse(req.body);
+    const emailLower = validatedData.email.toLowerCase();
 
     // Check for existing mobile
     const existingMobile = await prisma.user.findUnique({ where: { mobile: validatedData.mobile } });
@@ -241,7 +242,7 @@ export const createOfflineUser = async (req: Request, res: Response) => {
     }
 
     // Check for existing email
-    const existingEmail = await prisma.user.findUnique({ where: { email: validatedData.email } });
+    const existingEmail = await prisma.user.findUnique({ where: { email: emailLower } });
     if (existingEmail) {
       res.status(400).json({ error: 'A user with this email already exists.' });
       return;
@@ -259,7 +260,7 @@ export const createOfflineUser = async (req: Request, res: Response) => {
       data: {
         regId: newRegId,
         mobile: validatedData.mobile,
-        email: validatedData.email,
+        email: emailLower,
         password: hashedPassword,
         accountStatus: 'ACTIVE',
         requiresPasswordChange: true,
@@ -278,7 +279,7 @@ export const createOfflineUser = async (req: Request, res: Response) => {
 
     // Send credentials email — password is NEVER returned in the API response
     sendOfflineCredentialsEmail(
-      validatedData.email,
+      emailLower,
       validatedData.firstName,
       newRegId,
       tempPassword

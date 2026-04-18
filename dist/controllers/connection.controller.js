@@ -21,6 +21,11 @@ const sendInterest = (req, res) => __awaiter(void 0, void 0, void 0, function* (
     try {
         const senderId = req.user.id;
         const { receiverId } = req.body;
+        // Security Check: Only ACTIVE users can send proposals
+        if (req.user.accountStatus !== 'ACTIVE') {
+            res.status(403).json({ error: "Your account is currently pending approval. You cannot send match proposals yet." });
+            return;
+        }
         if (senderId === receiverId) {
             res.status(400).json({ error: "You cannot send an interest to yourself." });
             return;
