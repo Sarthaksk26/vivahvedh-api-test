@@ -28,7 +28,8 @@ const executeSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             profileFilters.casteId = parseInt(String(casteId));
         // Ensure there's a valid object construction for the profile
         let baseWhere = {
-            accountStatus: 'ACTIVE'
+            accountStatus: 'ACTIVE',
+            role: 'USER'
         };
         if (Object.keys(profileFilters).length > 0) {
             baseWhere.profile = { is: profileFilters };
@@ -104,7 +105,8 @@ const getPublicProfile = (req, res) => __awaiter(void 0, void 0, void 0, functio
         const userProfile = yield db_1.default.user.findUnique({
             where: {
                 id: id,
-                accountStatus: 'ACTIVE'
+                accountStatus: 'ACTIVE',
+                role: 'USER'
             },
             include: {
                 profile: true,

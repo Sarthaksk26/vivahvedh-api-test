@@ -17,6 +17,8 @@ const public_routes_1 = __importDefault(require("./routes/public.routes"));
 const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const story_routes_1 = __importDefault(require("./routes/story.routes"));
 const app = (0, express_1.default)();
+// Trust proxy for Render deployment to allow rate-limiting
+app.set('trust proxy', 1);
 // Security Middleware
 app.use((0, helmet_1.default)({
     crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving uploads to other origins
@@ -40,7 +42,11 @@ const authLimiter = (0, express_rate_limit_1.default)({
 });
 app.use('/api/auth', authLimiter);
 // Publicly expose the 'uploads' folder mapping from the exact filepath
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+const UPLOADS_PATH = path_1.default.join(process.cwd(), 'uploads');
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express_1.default.static(UPLOADS_PATH));
 // Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/user', user_routes_1.default);
