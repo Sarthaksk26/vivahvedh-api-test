@@ -15,7 +15,8 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // Ensure there's a valid object construction for the profile
     let baseWhere: any = {
-      accountStatus: 'ACTIVE'
+      accountStatus: 'ACTIVE',
+      role: 'USER'
     };
 
     if (Object.keys(profileFilters).length > 0) {
@@ -98,7 +99,8 @@ export const getPublicProfile = async (req: Request, res: Response) => {
     const userProfile = await prisma.user.findUnique({
       where: { 
         id: id as string,
-        accountStatus: 'ACTIVE'
+        accountStatus: 'ACTIVE',
+        role: 'USER'
       },
       include: {
         profile: true,
