@@ -34,7 +34,7 @@ export const verifyPayment = async (req: Request, res: Response) => {
         planType,
         amount: parseFloat(amount),
         transactionId,
-        screenshotUrl: file.filename,
+        screenshotUrl: `/uploads/${file.filename}`,
         status: 'PENDING',
       },
     });
