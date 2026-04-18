@@ -49,6 +49,7 @@ function generateUniqueRegId() {
 const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const validatedData = registerSchema.parse(req.body);
+        const emailLower = validatedData.email.toLowerCase();
         // Check if user already exists by mobile
         const existingMobile = yield db_1.default.user.findUnique({
             where: { mobile: validatedData.mobile }
@@ -59,7 +60,7 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Check if user already exists by email
         const existingEmail = yield db_1.default.user.findUnique({
-            where: { email: validatedData.email }
+            where: { email: emailLower }
         });
         if (existingEmail) {
             res.status(400).json({ error: 'User with this email already exists.' });
@@ -71,7 +72,7 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             data: {
                 regId: newRegId,
                 mobile: validatedData.mobile,
-                email: validatedData.email,
+                email: emailLower,
                 password: hashedPassword,
                 accountStatus: 'INACTIVE',
                 profileCreatedBy: validatedData.profileCreatedBy || null,
@@ -88,8 +89,8 @@ const register = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 profile: true
             }
         });
-        if (validatedData.email) {
-            (0, mail_service_1.sendWelcomeEmail)(validatedData.email, validatedData.firstName);
+        if (emailLower) {
+            (0, mail_service_1.sendWelcomeEmail)(emailLower, validatedData.firstName, newRegId);
         }
         res.status(201).json({
             message: 'Registration successful! Awaiting admin approval.',
@@ -113,13 +114,14 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             res.status(400).json({ error: 'Provide username (Email, Mobile, or RegID) and password' });
             return;
         }
+        const idLower = identifier.trim().toLowerCase();
         // Omni-Login Logic
         const user = yield db_1.default.user.findFirst({
             where: {
                 OR: [
                     { mobile: identifier },
-                    { email: identifier },
-                    { regId: identifier }
+                    { email: idLower },
+                    { regId: identifier.toUpperCase() }
                 ]
             }
         });

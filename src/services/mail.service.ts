@@ -38,29 +38,31 @@ export const sendMail = async (to: string, subject: string, htmlContent: string)
 // High-Impact Email Templates
 // =====================================
 
-export const sendWelcomeEmail = async (to: string, name: string) => {
+export const sendWelcomeEmail = async (to: string, name: string, regId: string) => {
   const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">Welcome to Vivahvedh!</h1>
       <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
-      <p>Your registration was successful. You have taken the first step towards finding your perfect life partner securely.</p>
+      <p>Your registration was successful. Your unique Register ID is: <b style="color: #e11d48; font-size: 20px;">${regId}</b></p>
+      <p>You have taken the first step towards finding your perfect life partner securely.</p>
       <p>An Admin will review your profile shortly. Make sure to complete your Dashboard details and upload photos to get approved faster!</p>
       <div style="margin-top: 30px; font-size: 12px; color: #777;">
         © ${new Date().getFullYear()} Vivahvedh Matrimonial
       </div>
     </div>
   `;
-  await sendMail(to, "Welcome to Vivahvedh Matrimony!", html);
+  await sendMail(to, `Welcome to Vivahvedh Matrimony! | ${regId}`, html);
 };
 
-export const sendApprovalEmail = async (to: string, name: string) => {
+export const sendApprovalEmail = async (to: string, name: string, regId: string) => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
   const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Profile Approved! ✅</h1>
-      <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
+      <p style="font-size: 16px;">Dear <b>${name}</b> (ID: ${regId}),</p>
       <p>Incredible news! The Vivahvedh moderation team has approved your profile.</p>
       <p>Your profile is now <b>Active</b> and completely searchable by thousands of other network members.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
@@ -69,13 +71,14 @@ export const sendApprovalEmail = async (to: string, name: string) => {
 };
 
 export const sendConnectionRequestEmail = async (to: string, receiverName: string, senderName: string) => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
   const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">New Match Interest! ❤️</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Someone has noticed you! <b>${senderName}</b> has expressed interest in your profile.</p>
       <p>Log in now to view their profile details and decide if you want to connect.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Request
       </a>
     </div>
@@ -84,20 +87,23 @@ export const sendConnectionRequestEmail = async (to: string, receiverName: strin
 };
 
 export const sendConnectionAcceptedEmail = async (to: string, receiverName: string, accepterName: string) => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
   const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Request Accepted! 🎉</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Great news! <b>${accepterName}</b> has accepted your connection request.</p>
       <p>You can now view their direct contact information and initiate communication.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Connected Match
       </a>
     </div>
   `;
   await sendMail(to, `${accepterName} Accepted Your Request!`, html);
 };
+
 export const sendPaymentStatusEmail = async (to: string, name: string, plan: string, status: 'APPROVED' | 'REJECTED') => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
   const isApproved = status === 'APPROVED';
   const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid ${isApproved ? '#16a34a' : '#dc2626'};">
@@ -108,13 +114,30 @@ export const sendPaymentStatusEmail = async (to: string, name: string, plan: str
         ? `<p>Your account features have been upgraded immediately. You now have full access according to your plan.</p>`
         : `<p>Unfortunately, your transaction could not be verified. Please ensure the transaction ID is correct and the screenshot is clear, then try again.</p>`
       }
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
   `;
   await sendMail(to, `Payment ${status} | Vivahvedh Matrimony`, html);
 };
+
+export const sendStoryApprovedEmail = async (to: string, groomName: string, brideName: string) => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
+  const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #e11d48;">
+      <h1 style="color: #e11d48;">Story Published! ❤️</h1>
+      <p style="font-size: 16px;">Dear <b>${groomName} & ${brideName}</b>,</p>
+      <p>Congratulations! Your success story has been approved and is now live on the Vivahvedh Success Stories page.</p>
+      <p>Your journey will inspire thousands of other members to find their soulmates.</p>
+      <a href="${baseUrl}/success-stories" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+        View Your Story
+      </a>
+    </div>
+  `;
+  await sendMail(to, `Your Success Story is Live! | Vivahvedh`, html);
+};
+
 
 export const sendEnquiryNotificationEmail = async (adminEmail: string, enquiry: any) => {
   const html = `

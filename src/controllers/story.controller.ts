@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/db';
 import { z } from 'zod';
+import { sendStoryApprovedEmail } from '../services/mail.service';
 
 // ==============================
 // PUBLIC: Get all approved stories
@@ -112,6 +113,17 @@ export const reviewStory = async (req: Request, res: Response) => {
       where: { id: storyId },
       data: { status }
     });
+
+    // Notify the submitter if approved
+    if (status === 'APPROVED' && story.submittedBy) {
+      const user = await prisma.user.findUnique({
+        where: { id: story.submittedBy },
+        include: { profile: true }
+      });
+      if (user?.email) {
+        sendStoryApprovedEmail(user.email, story.groomName, story.brideName);
+      }
+    }
 
     res.status(200).json({ message: `Story ${status.toLowerCase()} successfully.` });
   } catch (error) {

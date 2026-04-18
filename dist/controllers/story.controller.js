@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteStory = exports.createStory = exports.reviewStory = exports.getAllStories = exports.getPendingStories = exports.submitStory = exports.getApprovedStories = void 0;
 const db_1 = __importDefault(require("../config/db"));
 const zod_1 = require("zod");
+const mail_service_1 = require("../services/mail.service");
 // ==============================
 // PUBLIC: Get all approved stories
 // ==============================
@@ -123,6 +124,16 @@ const reviewStory = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
             where: { id: storyId },
             data: { status }
         });
+        // Notify the submitter if approved
+        if (status === 'APPROVED' && story.submittedBy) {
+            const user = yield db_1.default.user.findUnique({
+                where: { id: story.submittedBy },
+                include: { profile: true }
+            });
+            if (user === null || user === void 0 ? void 0 : user.email) {
+                (0, mail_service_1.sendStoryApprovedEmail)(user.email, story.groomName, story.brideName);
+            }
+        }
         res.status(200).json({ message: `Story ${status.toLowerCase()} successfully.` });
     }
     catch (error) {

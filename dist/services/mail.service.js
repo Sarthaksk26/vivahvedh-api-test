@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEnquiryReplyEmail = exports.sendOfflineCredentialsEmail = exports.sendEnquiryNotificationEmail = exports.sendPaymentStatusEmail = exports.sendConnectionAcceptedEmail = exports.sendConnectionRequestEmail = exports.sendApprovalEmail = exports.sendWelcomeEmail = exports.sendMail = void 0;
+exports.sendEnquiryReplyEmail = exports.sendOfflineCredentialsEmail = exports.sendEnquiryNotificationEmail = exports.sendStoryApprovedEmail = exports.sendPaymentStatusEmail = exports.sendConnectionAcceptedEmail = exports.sendConnectionRequestEmail = exports.sendApprovalEmail = exports.sendWelcomeEmail = exports.sendMail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 // Create a reusable transporter using exactly what we specify in .env
 // We default to a silent fail-catcher if env variables are missing so the app doesn't crash during development
@@ -50,29 +50,31 @@ exports.sendMail = sendMail;
 // =====================================
 // High-Impact Email Templates
 // =====================================
-const sendWelcomeEmail = (to, name) => __awaiter(void 0, void 0, void 0, function* () {
+const sendWelcomeEmail = (to, name, regId) => __awaiter(void 0, void 0, void 0, function* () {
     const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">Welcome to Vivahvedh!</h1>
       <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
-      <p>Your registration was successful. You have taken the first step towards finding your perfect life partner securely.</p>
+      <p>Your registration was successful. Your unique Register ID is: <b style="color: #e11d48; font-size: 20px;">${regId}</b></p>
+      <p>You have taken the first step towards finding your perfect life partner securely.</p>
       <p>An Admin will review your profile shortly. Make sure to complete your Dashboard details and upload photos to get approved faster!</p>
       <div style="margin-top: 30px; font-size: 12px; color: #777;">
         © ${new Date().getFullYear()} Vivahvedh Matrimonial
       </div>
     </div>
   `;
-    yield (0, exports.sendMail)(to, "Welcome to Vivahvedh Matrimony!", html);
+    yield (0, exports.sendMail)(to, `Welcome to Vivahvedh Matrimony! | ${regId}`, html);
 });
 exports.sendWelcomeEmail = sendWelcomeEmail;
-const sendApprovalEmail = (to, name) => __awaiter(void 0, void 0, void 0, function* () {
+const sendApprovalEmail = (to, name, regId) => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
     const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Profile Approved! ✅</h1>
-      <p style="font-size: 16px;">Dear <b>${name}</b>,</p>
+      <p style="font-size: 16px;">Dear <b>${name}</b> (ID: ${regId}),</p>
       <p>Incredible news! The Vivahvedh moderation team has approved your profile.</p>
       <p>Your profile is now <b>Active</b> and completely searchable by thousands of other network members.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
@@ -81,13 +83,14 @@ const sendApprovalEmail = (to, name) => __awaiter(void 0, void 0, void 0, functi
 });
 exports.sendApprovalEmail = sendApprovalEmail;
 const sendConnectionRequestEmail = (to, receiverName, senderName) => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
     const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
       <h1 style="color: #e11d48;">New Match Interest! ❤️</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Someone has noticed you! <b>${senderName}</b> has expressed interest in your profile.</p>
       <p>Log in now to view their profile details and decide if you want to connect.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Request
       </a>
     </div>
@@ -96,13 +99,14 @@ const sendConnectionRequestEmail = (to, receiverName, senderName) => __awaiter(v
 });
 exports.sendConnectionRequestEmail = sendConnectionRequestEmail;
 const sendConnectionAcceptedEmail = (to, receiverName, accepterName) => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
     const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #16a34a;">
       <h1 style="color: #16a34a;">Request Accepted! 🎉</h1>
       <p style="font-size: 16px;">Dear <b>${receiverName}</b>,</p>
       <p>Great news! <b>${accepterName}</b> has accepted your connection request.</p>
       <p>You can now view their direct contact information and initiate communication.</p>
-      <a href="${process.env.CLIENT_URL || '#'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         View Connected Match
       </a>
     </div>
@@ -111,6 +115,7 @@ const sendConnectionAcceptedEmail = (to, receiverName, accepterName) => __awaite
 });
 exports.sendConnectionAcceptedEmail = sendConnectionAcceptedEmail;
 const sendPaymentStatusEmail = (to, name, plan, status) => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
     const isApproved = status === 'APPROVED';
     const html = `
     <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid ${isApproved ? '#16a34a' : '#dc2626'};">
@@ -120,7 +125,7 @@ const sendPaymentStatusEmail = (to, name, plan, status) => __awaiter(void 0, voi
       ${isApproved
         ? `<p>Your account features have been upgraded immediately. You now have full access according to your plan.</p>`
         : `<p>Unfortunately, your transaction could not be verified. Please ensure the transaction ID is correct and the screenshot is clear, then try again.</p>`}
-      <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
         Go to Dashboard
       </a>
     </div>
@@ -128,6 +133,22 @@ const sendPaymentStatusEmail = (to, name, plan, status) => __awaiter(void 0, voi
     yield (0, exports.sendMail)(to, `Payment ${status} | Vivahvedh Matrimony`, html);
 });
 exports.sendPaymentStatusEmail = sendPaymentStatusEmail;
+const sendStoryApprovedEmail = (to, groomName, brideName) => __awaiter(void 0, void 0, void 0, function* () {
+    const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
+    const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px; border-top: 5px solid #e11d48;">
+      <h1 style="color: #e11d48;">Story Published! ❤️</h1>
+      <p style="font-size: 16px;">Dear <b>${groomName} & ${brideName}</b>,</p>
+      <p>Congratulations! Your success story has been approved and is now live on the Vivahvedh Success Stories page.</p>
+      <p>Your journey will inspire thousands of other members to find their soulmates.</p>
+      <a href="${baseUrl}/success-stories" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+        View Your Story
+      </a>
+    </div>
+  `;
+    yield (0, exports.sendMail)(to, `Your Success Story is Live! | Vivahvedh`, html);
+});
+exports.sendStoryApprovedEmail = sendStoryApprovedEmail;
 const sendEnquiryNotificationEmail = (adminEmail, enquiry) => __awaiter(void 0, void 0, void 0, function* () {
     const html = `
     <div style="font-family: Arial, sans-serif; color: #333; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
