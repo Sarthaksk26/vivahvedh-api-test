@@ -13,16 +13,21 @@ const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        const userCount = yield prisma.user.count();
-        const storyCount = yield prisma.successStory.count();
-        const adminUser = yield prisma.user.findFirst({ where: { role: 'ADMIN' } });
-        console.log('--- DATABASE STATUS ---');
-        console.log(`Total Users: ${userCount}`);
-        console.log(`Total Stories: ${storyCount}`);
-        console.log(`Admin User: ${adminUser ? adminUser.regId : 'NONE'}`);
-        if (adminUser) {
-            console.log(`Admin Email: ${adminUser.email}`);
-        }
+        const stories = yield prisma.successStory.findMany();
+        console.log('--- STORIES STATUS ---');
+        stories.forEach(s => {
+            console.log(`Story: ${s.groomName} & ${s.brideName} | Status: ${s.status}`);
+        });
+        const count = yield prisma.successStory.updateMany({
+            where: { status: 'PENDING' },
+            data: { status: 'APPROVED' }
+        });
+        console.log(`Approved ${count.count} pending stories.`);
     });
 }
-main().catch(e => console.error(e));
+main()
+    .then(() => prisma.$disconnect())
+    .catch(e => {
+    console.error(e);
+    prisma.$disconnect();
+});

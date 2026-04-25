@@ -26,303 +26,290 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getProfileViewers = exports.recordProfileView = exports.getMyShortlist = exports.shortlistProfile = exports.changePassword = exports.updateProfile = exports.deletePhoto = exports.uploadPhoto = exports.getMyProfile = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const db_1 = __importDefault(require("../config/db"));
-const fs_1 = __importDefault(require("fs"));
+const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
+const zod_1 = require("zod");
 const sanitize_1 = require("../utils/sanitize");
-const getMyProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        // The user ID is guaranteed by our requireAuth middleware
-        const userId = req.user.id;
-        // We pull down the core user account + their deep linked profile and family stats natively.
-        const fullUser = yield db_1.default.user.findUnique({
-            where: { id: userId },
-            include: {
-                profile: true,
-                family: true,
-                physical: true,
-                education: true,
-                astrology: true,
-                preferences: true,
-                images: true
-            }
-        });
-        if (!fullUser) {
-            res.status(404).json({ error: 'User block not found.' });
-            return;
-        }
-        // Never send the password hash back to the frontend!
-        const { password } = fullUser, safeUser = __rest(fullUser, ["password"]);
-        res.status(200).json((0, sanitize_1.maskPrivateDetails)(safeUser, true));
+const AppError_1 = require("../utils/AppError");
+const asyncHandler_1 = require("../utils/asyncHandler");
+// ═══════════════════════════════════════════════════════════════════
+// Zod schemas — whitelist of ALLOWED fields per sub-model.
+// Any field NOT listed here is silently stripped from the payload.
+// ═══════════════════════════════════════════════════════════════════
+const profileSchema = zod_1.z.object({
+    firstName: zod_1.z.string().min(1).max(100).optional(),
+    middleName: zod_1.z.string().max(100).optional().nullable(),
+    lastName: zod_1.z.string().min(1).max(100).optional(),
+    gender: zod_1.z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+    maritalStatus: zod_1.z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']).optional(),
+    birthDateTime: zod_1.z.string().optional().nullable().transform((val) => {
+        if (!val)
+            return null;
+        // Parse at UTC noon to prevent IST timezone shift
+        return new Date(`${val.slice(0, 10)}T12:00:00Z`);
+    }),
+    birthPlace: zod_1.z.string().max(200).optional().nullable(),
+    aboutMe: zod_1.z.string().max(2000).optional().nullable(),
+    religionId: zod_1.z.number().int().positive().optional().nullable(),
+    casteId: zod_1.z.number().int().positive().optional().nullable(),
+    subCasteId: zod_1.z.number().int().positive().optional().nullable(),
+}).strict();
+const familySchema = zod_1.z.object({
+    fatherName: zod_1.z.string().max(100).optional().nullable(),
+    fatherOccupation: zod_1.z.string().max(200).optional().nullable(),
+    motherName: zod_1.z.string().max(100).optional().nullable(),
+    motherOccupation: zod_1.z.string().max(200).optional().nullable(),
+    motherHometown: zod_1.z.string().max(200).optional().nullable(),
+    maternalUncleName: zod_1.z.string().max(100).optional().nullable(),
+    brothers: zod_1.z.number().int().min(0).max(20).optional(),
+    marriedBrothers: zod_1.z.number().int().min(0).max(20).optional(),
+    sisters: zod_1.z.number().int().min(0).max(20).optional(),
+    marriedSisters: zod_1.z.number().int().min(0).max(20).optional(),
+    relativesSirnames: zod_1.z.string().max(500).optional().nullable(),
+    familyBackground: zod_1.z.string().max(1000).optional().nullable(),
+    familyWealth: zod_1.z.string().max(200).optional().nullable(),
+    agricultureLand: zod_1.z.string().max(200).optional().nullable(),
+    plot: zod_1.z.string().max(200).optional().nullable(),
+    flat: zod_1.z.string().max(200).optional().nullable(),
+}).strict();
+const educationSchema = zod_1.z.object({
+    qualificationId: zod_1.z.number().int().positive().optional().nullable(),
+    trade: zod_1.z.string().max(200).optional().nullable(),
+    college: zod_1.z.string().max(300).optional().nullable(),
+    jobBusiness: zod_1.z.string().max(300).optional().nullable(),
+    jobAddress: zod_1.z.string().max(500).optional().nullable(),
+    annualIncome: zod_1.z.string().max(100).optional().nullable(),
+    specialAchievement: zod_1.z.string().max(500).optional().nullable(),
+}).strict();
+const physicalSchema = zod_1.z.object({
+    height: zod_1.z.string().max(50).optional().nullable(),
+    weight: zod_1.z.number().int().min(20).max(300).optional().nullable(),
+    bloodGroup: zod_1.z.string().max(10).optional().nullable(),
+    complexion: zod_1.z.string().max(50).optional().nullable(),
+    health: zod_1.z.string().max(200).optional().nullable(),
+    disease: zod_1.z.string().max(200).optional().nullable(),
+    diet: zod_1.z.string().max(50).optional().nullable(),
+    smoke: zod_1.z.boolean().optional().nullable(),
+    drink: zod_1.z.boolean().optional().nullable(),
+}).strict();
+const astrologySchema = zod_1.z.object({
+    gothra: zod_1.z.string().max(100).optional().nullable(),
+    rashi: zod_1.z.string().max(100).optional().nullable(),
+    nakshatra: zod_1.z.string().max(100).optional().nullable(),
+    charan: zod_1.z.string().max(50).optional().nullable(),
+    nadi: zod_1.z.string().max(50).optional().nullable(),
+    gan: zod_1.z.string().max(50).optional().nullable(),
+    mangal: zod_1.z.string().max(50).optional().nullable(),
+}).strict();
+const preferencesSchema = zod_1.z.object({
+    expectations: zod_1.z.string().max(2000).optional().nullable(),
+}).strict();
+const updateProfileBodySchema = zod_1.z.object({
+    profile: profileSchema.optional(),
+    family: familySchema.optional(),
+    education: educationSchema.optional(),
+    physical: physicalSchema.optional(),
+    astrology: astrologySchema.optional(),
+    preferences: preferencesSchema.optional(),
+}).strict();
+// ═══════════════════════════════════════════════════════════════════
+// Safe file-path helper — prevents path-traversal attacks
+// ═══════════════════════════════════════════════════════════════════
+const UPLOADS_DIR = path_1.default.join(process.cwd(), 'uploads');
+/**
+ * Given a stored image URL like `/uploads/img-xxx.webp`, returns
+ * the safe absolute path on disk. Returns null if the URL is
+ * malformed or attempts traversal.
+ */
+function safeFilePath(imageUrl) {
+    // Extract only the basename — path.basename strips any ../ attempts
+    const segments = imageUrl.split('/');
+    const rawFilename = segments[segments.length - 1];
+    if (!rawFilename)
+        return null;
+    const basename = path_1.default.basename(rawFilename);
+    // Double-check: basename must not contain path separators
+    if (basename !== rawFilename || basename.includes('..'))
+        return null;
+    return path_1.default.join(UPLOADS_DIR, basename);
+}
+// ═══════════════════════════════════════════════════════════════════
+// Controllers
+// ═══════════════════════════════════════════════════════════════════
+exports.getMyProfile = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const fullUser = yield db_1.default.user.findUnique({
+        where: { id: userId },
+        include: {
+            profile: true,
+            family: true,
+            physical: true,
+            education: true,
+            astrology: true,
+            preferences: true,
+            images: true,
+        },
+    });
+    if (!fullUser)
+        throw new AppError_1.AppError('User not found.', 404);
+    // Never leak the password hash
+    const { password } = fullUser, safeUser = __rest(fullUser, ["password"]);
+    res.status(200).json((0, sanitize_1.maskPrivateDetails)(safeUser, true));
+}));
+exports.uploadPhoto = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!req.file)
+        throw new AppError_1.AppError('No image file provided.', 400);
+    const userId = req.user.id;
+    const photoUrl = `/uploads/${req.file.filename}`;
+    const existingCount = yield db_1.default.image.count({ where: { userId } });
+    yield db_1.default.image.create({
+        data: {
+            userId,
+            url: photoUrl,
+            isPrimary: existingCount === 0,
+        },
+    });
+    res.status(200).json({ success: true, photoUrl });
+}));
+exports.deletePhoto = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const imageId = req.params.imageId;
+    const image = yield db_1.default.image.findUnique({ where: { id: imageId } });
+    if (!image || image.userId !== userId) {
+        throw new AppError_1.AppError('Image not found or access denied.', 404);
     }
-    catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal Server Error fetching profile' });
-    }
-});
-exports.getMyProfile = getMyProfile;
-const uploadPhoto = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        if (!req.file) {
-            res.status(400).json({ error: 'No image file provided.' });
-            return;
-        }
-        const userId = req.user.id;
-        // Construct the public URL that the frontend will use to display it
-        // Store only the relative path for environment portability
-        const photoUrl = `/uploads/${req.file.filename}`;
-        // Check how many photos already exist
-        const existingCount = yield db_1.default.image.count({ where: { userId } });
-        // Update the Prisma database to create a new Image tracking record
-        yield db_1.default.image.create({
-            data: {
-                userId: userId,
-                url: photoUrl,
-                isPrimary: existingCount === 0 // First photo is automatically primary
-            }
-        });
-        res.status(200).json({ success: true, photoUrl });
-    }
-    catch (error) {
-        console.error("Photo Upload Error:", error);
-        res.status(500).json({ error: 'Failed to upload photo.' });
-    }
-});
-exports.uploadPhoto = uploadPhoto;
-const deletePhoto = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const imageId = req.params.imageId;
-        // Find the image and verify ownership
-        const image = yield db_1.default.image.findUnique({ where: { id: imageId } });
-        if (!image || image.userId !== userId) {
-            res.status(404).json({ error: 'Image not found or access denied.' });
-            return;
-        }
-        // Delete from disk
+    // Safe deletion — uses path.basename to block traversal
+    const filePath = safeFilePath(image.url);
+    if (filePath) {
         try {
-            const filename = image.url.split('/uploads/')[1];
-            if (filename) {
-                const filePath = path_1.default.join(__dirname, '../../uploads', filename);
-                if (fs_1.default.existsSync(filePath)) {
-                    fs_1.default.unlinkSync(filePath);
-                }
-            }
+            yield promises_1.default.access(filePath);
+            yield promises_1.default.unlink(filePath);
         }
-        catch (fsError) {
-            console.warn("File deletion warning:", fsError);
+        catch (_a) {
+            // File already gone from disk — not critical
         }
-        // Delete from database
-        yield db_1.default.image.delete({ where: { id: imageId } });
-        // If deleted image was primary, set the next one as primary
-        if (image.isPrimary) {
-            const nextImage = yield db_1.default.image.findFirst({
-                where: { userId },
-                orderBy: { createdAt: 'asc' }
-            });
-            if (nextImage) {
-                yield db_1.default.image.update({
-                    where: { id: nextImage.id },
-                    data: { isPrimary: true }
-                });
-            }
-        }
-        res.status(200).json({ success: true, message: 'Photo deleted.' });
     }
-    catch (error) {
-        console.error("Photo Delete Error:", error);
-        res.status(500).json({ error: 'Failed to delete photo.' });
-    }
-});
-exports.deletePhoto = deletePhoto;
-const updateProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { profile, family, education, physical, astrology, preferences } = req.body;
-        const updatedUser = yield db_1.default.user.update({
-            where: { id: userId },
-            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, (profile && {
-                profile: {
-                    upsert: {
-                        create: profile,
-                        update: profile
-                    }
-                }
-            })), (family && {
-                family: {
-                    upsert: {
-                        create: family,
-                        update: family
-                    }
-                }
-            })), (education && {
-                education: {
-                    upsert: {
-                        create: education,
-                        update: education
-                    }
-                }
-            })), (physical && {
-                physical: {
-                    upsert: {
-                        create: physical,
-                        update: physical
-                    }
-                }
-            })), (astrology && {
-                astrology: {
-                    upsert: {
-                        create: astrology,
-                        update: astrology
-                    }
-                }
-            })), (preferences && {
-                preferences: {
-                    upsert: {
-                        create: preferences,
-                        update: preferences
-                    }
-                }
-            })),
-            include: {
-                profile: true,
-                family: true,
-                education: true,
-                physical: true,
-                astrology: true,
-                preferences: true
-            }
-        });
-        res.status(200).json({ success: true, message: 'Profile data saved successfully.', user: updatedUser });
-    }
-    catch (error) {
-        console.error("Profile Update Error:", error);
-        res.status(500).json({ error: 'Failed to update profile.' });
-    }
-});
-exports.updateProfile = updateProfile;
-const changePassword = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { currentPassword, newPassword } = req.body;
-        if (!currentPassword || !newPassword || newPassword.length < 6) {
-            res.status(400).json({ error: 'Current password and new password (min 6 chars) required.' });
-            return;
-        }
-        const user = yield db_1.default.user.findUnique({ where: { id: userId } });
-        if (!user) {
-            res.status(404).json({ error: 'User not found.' });
-            return;
-        }
-        const isMatch = yield bcrypt_1.default.compare(currentPassword, user.password);
-        if (!isMatch) {
-            res.status(401).json({ error: 'Current password is incorrect.' });
-            return;
-        }
-        const hashedPassword = yield bcrypt_1.default.hash(newPassword, 10);
-        yield db_1.default.user.update({
-            where: { id: userId },
-            data: {
-                password: hashedPassword,
-                requiresPasswordChange: false
-            }
-        });
-        res.status(200).json({ success: true, message: 'Password changed successfully.' });
-    }
-    catch (error) {
-        console.error("Password Change Error:", error);
-        res.status(500).json({ error: 'Failed to change password.' });
-    }
-});
-exports.changePassword = changePassword;
-const shortlistProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const { targetUserId } = req.body;
-        if (userId === targetUserId) {
-            res.status(400).json({ error: 'Cannot shortlist yourself.' });
-            return;
-        }
-        // Check if already shortlisted
-        const existing = yield db_1.default.shortlist.findFirst({
-            where: { userId, targetUserId }
-        });
-        if (existing) {
-            // Remove from shortlist (toggle)
-            yield db_1.default.shortlist.delete({ where: { id: existing.id } });
-            res.status(200).json({ shortlisted: false, message: 'Removed from shortlist.' });
-            return;
-        }
-        yield db_1.default.shortlist.create({
-            data: { userId, targetUserId }
-        });
-        res.status(200).json({ shortlisted: true, message: 'Profile shortlisted.' });
-    }
-    catch (error) {
-        console.error("Shortlist Error:", error);
-        res.status(500).json({ error: 'Failed to shortlist profile.' });
-    }
-});
-exports.shortlistProfile = shortlistProfile;
-const getMyShortlist = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const shortlisted = yield db_1.default.shortlist.findMany({
+    yield db_1.default.image.delete({ where: { id: imageId } });
+    // Promote next image to primary if needed
+    if (image.isPrimary) {
+        const nextImage = yield db_1.default.image.findFirst({
             where: { userId },
-            include: {
-                target: {
-                    include: { profile: true, images: { where: { isPrimary: true }, take: 1 } }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'asc' },
         });
-        res.status(200).json(shortlisted);
-    }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to fetch shortlist.' });
-    }
-});
-exports.getMyShortlist = getMyShortlist;
-const recordProfileView = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const viewerId = req.user.id;
-        const profileId = req.params.profileId;
-        if (viewerId === profileId) {
-            res.status(200).json({ recorded: false });
-            return;
+        if (nextImage) {
+            yield db_1.default.image.update({
+                where: { id: nextImage.id },
+                data: { isPrimary: true },
+            });
         }
-        // Upsert: update timestamp if already viewed, otherwise create
-        yield db_1.default.profileView.upsert({
-            where: {
-                viewerId_viewedId: { viewerId, viewedId: profileId }
-            },
-            update: { viewedAt: new Date() },
-            create: { viewerId, viewedId: profileId }
-        });
-        res.status(200).json({ recorded: true });
     }
-    catch (error) {
-        console.error("Profile View Error:", error);
-        res.status(500).json({ error: 'Failed to record view.' });
+    res.status(200).json({ success: true, message: 'Photo deleted.' });
+}));
+exports.updateProfile = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    // Validate + strip unknown fields via .strict()
+    const data = updateProfileBodySchema.parse(req.body);
+    // Build the Prisma nested-write dynamically from validated data only
+    const prismaData = {};
+    const subModels = ['profile', 'family', 'education', 'physical', 'astrology', 'preferences'];
+    for (const key of subModels) {
+        const section = data[key];
+        if (section && Object.keys(section).length > 0) {
+            prismaData[key] = {
+                upsert: { create: section, update: section },
+            };
+        }
     }
+    const updatedUser = yield db_1.default.user.update({
+        where: { id: userId },
+        data: prismaData,
+        include: {
+            profile: true,
+            family: true,
+            education: true,
+            physical: true,
+            astrology: true,
+            preferences: true,
+        },
+    });
+    res.status(200).json({
+        success: true,
+        message: 'Profile data saved successfully.',
+        user: updatedUser,
+    });
+}));
+const changePasswordSchema = zod_1.z.object({
+    currentPassword: zod_1.z.string().min(1, 'Current password is required.'),
+    newPassword: zod_1.z.string().min(6, 'New password must be at least 6 characters.'),
 });
-exports.recordProfileView = recordProfileView;
-const getProfileViewers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const userId = req.user.id;
-        const viewers = yield db_1.default.profileView.findMany({
-            where: { viewedId: userId },
-            include: {
-                viewer: {
-                    include: { profile: true, images: { where: { isPrimary: true }, take: 1 } }
-                }
+exports.changePassword = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+    const user = yield db_1.default.user.findUnique({ where: { id: userId } });
+    if (!user)
+        throw new AppError_1.AppError('User not found.', 404);
+    const isMatch = yield bcrypt_1.default.compare(currentPassword, user.password);
+    if (!isMatch)
+        throw new AppError_1.AppError('Current password is incorrect.', 401);
+    const hashedPassword = yield bcrypt_1.default.hash(newPassword, 10);
+    yield db_1.default.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword, requiresPasswordChange: false },
+    });
+    res.status(200).json({ success: true, message: 'Password changed successfully.' });
+}));
+exports.shortlistProfile = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const { targetUserId } = req.body;
+    if (userId === targetUserId)
+        throw new AppError_1.AppError('Cannot shortlist yourself.', 400);
+    const existing = yield db_1.default.shortlist.findFirst({ where: { userId, targetUserId } });
+    if (existing) {
+        yield db_1.default.shortlist.delete({ where: { id: existing.id } });
+        res.status(200).json({ shortlisted: false, message: 'Removed from shortlist.' });
+        return;
+    }
+    yield db_1.default.shortlist.create({ data: { userId, targetUserId } });
+    res.status(200).json({ shortlisted: true, message: 'Profile shortlisted.' });
+}));
+exports.getMyShortlist = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const shortlisted = yield db_1.default.shortlist.findMany({
+        where: { userId },
+        include: {
+            target: {
+                include: { profile: true, images: { where: { isPrimary: true }, take: 1 } },
             },
-            orderBy: { viewedAt: 'desc' },
-            take: 50
-        });
-        res.status(200).json(viewers);
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+    res.status(200).json(shortlisted);
+}));
+exports.recordProfileView = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const viewerId = req.user.id;
+    const profileId = req.params.profileId;
+    if (viewerId === profileId) {
+        res.status(200).json({ recorded: false });
+        return;
     }
-    catch (error) {
-        res.status(500).json({ error: 'Failed to fetch profile viewers.' });
-    }
-});
-exports.getProfileViewers = getProfileViewers;
+    yield db_1.default.profileView.upsert({
+        where: { viewerId_viewedId: { viewerId, viewedId: profileId } },
+        update: { viewedAt: new Date() },
+        create: { viewerId, viewedId: profileId },
+    });
+    res.status(200).json({ recorded: true });
+}));
+exports.getProfileViewers = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const userId = req.user.id;
+    const viewers = yield db_1.default.profileView.findMany({
+        where: { viewedId: userId },
+        include: {
+            viewer: {
+                include: { profile: true, images: { where: { isPrimary: true }, take: 1 } },
+            },
+        },
+        orderBy: { viewedAt: 'desc' },
+        take: 50,
+    });
+    res.status(200).json(viewers);
+}));

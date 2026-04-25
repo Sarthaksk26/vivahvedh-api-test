@@ -1,25 +1,29 @@
 import { Router } from 'express';
-import { 
-  getMyProfile, uploadPhoto, deletePhoto, updateProfile, 
-  changePassword, shortlistProfile, getMyShortlist, 
-  getProfileViewers 
+import {
+  getMyProfile, uploadPhoto, deletePhoto, updateProfile,
+  changePassword, shortlistProfile, getMyShortlist,
+  getProfileViewers
 } from '../controllers/user.controller';
-import { requireAuth } from '../middleware/auth.middleware';
+import { requireAuth, requireActivePassword } from '../middleware/auth.middleware';
 import { upload, processImage } from '../config/multer';
 
 const router = Router();
 
-router.get('/profile', requireAuth, getMyProfile);
-router.post('/upload-photo', requireAuth, upload.single('photo'), processImage, uploadPhoto);
-router.delete('/delete-photo/:imageId', requireAuth, deletePhoto);
-router.patch('/update', requireAuth, updateProfile);
+// All user routes require auth + active password (except change-password)
 router.post('/change-password', requireAuth, changePassword);
 
+router.use(requireAuth, requireActivePassword);
+
+router.get('/profile', getMyProfile);
+router.post('/upload-photo', upload.single('photo'), processImage, uploadPhoto);
+router.delete('/delete-photo/:imageId', deletePhoto);
+router.patch('/update', updateProfile);
+
 // Shortlist
-router.post('/shortlist', requireAuth, shortlistProfile);
-router.get('/shortlist', requireAuth, getMyShortlist);
+router.post('/shortlist', shortlistProfile);
+router.get('/shortlist', getMyShortlist);
 
 // Who viewed my profile
-router.get('/profile-viewers', requireAuth, getProfileViewers);
+router.get('/profile-viewers', getProfileViewers);
 
 export default router;
