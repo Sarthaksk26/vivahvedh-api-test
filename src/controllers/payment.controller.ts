@@ -51,14 +51,19 @@ export const verifyPayment = async (req: Request, res: Response) => {
 
 export const getPendingPayments = async (req: Request, res: Response) => {
   try {
+    const statusFilter = req.query.status as string | undefined;
+    const where: any = {};
+    if (statusFilter && ['PENDING','APPROVED','REJECTED'].includes(statusFilter)) {
+      where.status = statusFilter;
+    }
     const payments = await prisma.pendingPayment.findMany({
-      where: { status: 'PENDING' },
+      where,
       include: { user: { select: { mobile: true, email: true, regId: true } } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
     res.json(payments);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch pending payments.' });
+    res.status(500).json({ error: 'Failed to fetch payments.' });
   }
 };
 

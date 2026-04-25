@@ -60,15 +60,20 @@ const verifyPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* 
 exports.verifyPayment = verifyPayment;
 const getPendingPayments = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const statusFilter = req.query.status;
+        const where = {};
+        if (statusFilter && ['PENDING', 'APPROVED', 'REJECTED'].includes(statusFilter)) {
+            where.status = statusFilter;
+        }
         const payments = yield db_1.default.pendingPayment.findMany({
-            where: { status: 'PENDING' },
+            where,
             include: { user: { select: { mobile: true, email: true, regId: true } } },
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: 'desc' },
         });
         res.json(payments);
     }
     catch (error) {
-        res.status(500).json({ error: 'Failed to fetch pending payments.' });
+        res.status(500).json({ error: 'Failed to fetch payments.' });
     }
 });
 exports.getPendingPayments = getPendingPayments;

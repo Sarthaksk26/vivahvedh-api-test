@@ -1,14 +1,36 @@
 import { Router } from 'express';
-import { getPendingApprovals, getAllUsers, approveUser, banUser, deleteUser, getEnquiries, replyToEnquiry, markEnquiryResolved, setUserPlan, createOfflineUser } from '../controllers/admin.controller';
+import { 
+  getPendingApprovals, 
+  getAllUsers, 
+  approveUser, 
+  banUser, 
+  deleteUser, 
+  getEnquiries, 
+  replyToEnquiry, 
+  markEnquiryResolved, 
+  setUserPlan, 
+  createOfflineUser,
+  getAdminStats,
+  updateUserByAdmin,
+  getUpcomingBirthdays,
+  sendBirthdayWish,
+  getConnectionLogs
+} from '../controllers/admin.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// @route   GET /api/admin/stats
+router.get('/stats', requireAuth, requireAdmin, getAdminStats);
 
 // @route   GET /api/admin/pending
 router.get('/pending', requireAuth, requireAdmin, getPendingApprovals);
 
 // @route   GET /api/admin/all-users
 router.get('/all-users', requireAuth, requireAdmin, getAllUsers);
+
+// @route   PATCH /api/admin/users/:id
+router.patch('/users/:id', requireAuth, requireAdmin, updateUserByAdmin);
 
 // @route   POST /api/admin/approve
 router.post('/approve', requireAuth, requireAdmin, approveUser);
@@ -32,7 +54,13 @@ router.patch('/enquiries/resolve', requireAuth, requireAdmin, markEnquiryResolve
 router.post('/set-plan', requireAuth, requireAdmin, setUserPlan);
 
 // @route   POST /api/admin/users/create
-// @desc    Admin creates a profile for an offline/walk-in customer
 router.post('/users/create', requireAuth, requireAdmin, createOfflineUser);
+
+// Birthdays
+router.get('/birthdays', requireAuth, requireAdmin, getUpcomingBirthdays);
+router.post('/birthdays/send-wishes/:id', requireAuth, requireAdmin, sendBirthdayWish);
+
+// Connections
+router.get('/connections', requireAuth, requireAdmin, getConnectionLogs);
 
 export default router;

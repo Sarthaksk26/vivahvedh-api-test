@@ -33,7 +33,7 @@ export const getPendingApprovals = async (req: Request, res: Response) => {
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const allUsers = await prisma.user.findMany({
-      where: { accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
+      where: { role: 'USER', accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
       include: { profile: true },
       orderBy: { createdAt: 'desc' }
     });
@@ -299,4 +299,105 @@ export const createOfflineUser = async (req: Request, res: Response) => {
     console.error("Create Offline User Error:", error);
     res.status(500).json({ error: 'Failed to create offline user profile.' });
   }
+};
+
+export const getAdminStats = async (req: Request, res: Response) => {
+  try {
+    const [totalUsers, activeUsers, pendingApprovals, pendingPayments, totalConnections, thisMonthRegs] = await Promise.all([
+      prisma.user.count({ where: { role: 'USER' } }),
+      prisma.user.count({ where: { role: 'USER', accountStatus: 'ACTIVE' } }),
+      prisma.user.count({ where: { role: 'USER', accountStatus: 'INACTIVE' } }),
+      prisma.pendingPayment.count({ where: { status: 'PENDING' } }),
+      prisma.request.count(),
+      prisma.user.count({ where: { role: 'USER', createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } })
+    ]);
+    res.json({ totalUsers, activeUsers, pendingApprovals, pendingPayments, totalConnections, thisMonthRegs });
+  } catch (error) { res.status(500).json({ error: 'Failed to fetch stats' }); }
+};
+
+export const updateUserByAdmin = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { email, mobile, profile, physical, education, family, astrology } = req.body;
+
+    const targetUser = await prisma.user.findUnique({ where: { id } });
+    if (!targetUser) { res.status(404).json({ error: 'User not found.' }); return; }
+
+    // Update account-level fields
+    const accountUpdate: any = {};
+    if (email) accountUpdate.email = email.toLowerCase();
+    if (mobile) accountUpdate.mobile = mobile;
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        ...accountUpdate,
+        ...(profile && { profile: { upsert: { create: profile, update: profile } } }),
+        ...(physical && { physical: { upsert: { create: physical, update: physical } } }),
+        ...(education && { education: { upsert: { create: education, update: education } } }),
+        ...(family && { family: { upsert: { create: family, update: family } } }),
+        ...(astrology && { astrology: { upsert: { create: astrology, update: astrology } } }),
+      },
+      include: { profile: true, physical: true, education: true, family: true, astrology: true }
+    });
+    res.json({ message: 'User updated successfully.', user: updatedUser });
+  } catch (error: any) {
+    if (error.code === 'P2002') { res.status(400).json({ error: 'Email or mobile already in use.' }); return; }
+    console.error('Admin Update User Error:', error);
+    res.status(500).json({ error: 'Failed to update user.' });
+  }
+};
+
+export const getUpcomingBirthdays = async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: 'USER', accountStatus: 'ACTIVE', profile: { birthDateTime: { not: null } } },
+      include: { profile: { select: { firstName: true, lastName: true, birthDateTime: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const today = new Date();
+    const upcoming = users
+      .filter(u => u.profile?.birthDateTime)
+      .map(u => {
+        const bday = new Date(u.profile!.birthDateTime!);
+        const nextBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+        if (nextBday < today) nextBday.setFullYear(nextBday.getFullYear() + 1);
+        const daysUntil = Math.ceil((nextBday.getTime() - today.getTime()) / (1000*60*60*24));
+        return { id: u.id, regId: u.regId, email: u.email, mobile: u.mobile, firstName: u.profile!.firstName, lastName: u.profile!.lastName, birthDate: u.profile!.birthDateTime, daysUntil };
+      })
+      .filter(u => u.daysUntil <= 30)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+
+    res.json(upcoming);
+  } catch (error) { res.status(500).json({ error: 'Failed to fetch birthdays' }); }
+};
+
+export const sendBirthdayWish = async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const user = await prisma.user.findUnique({ where: { id }, include: { profile: true } });
+    if (!user || !user.email) { res.status(404).json({ error: 'User not found or no email.' }); return; }
+    const { sendBirthdayWishEmail } = await import('../services/mail.service');
+    await sendBirthdayWishEmail(user.email, (user as any).profile?.firstName || 'Member');
+    res.json({ message: 'Birthday wishes sent!' });
+  } catch (error) { res.status(500).json({ error: 'Failed to send wishes' }); }
+};
+
+export const getConnectionLogs = async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string;
+    const where: any = {};
+    if (status && ['PENDING','ACCEPTED','REJECTED'].includes(status)) where.status = status;
+    const connections = await prisma.request.findMany({
+      where,
+      include: {
+        sender: { include: { profile: { select: { firstName: true, lastName: true } } } },
+        receiver: { include: { profile: { select: { firstName: true, lastName: true } } } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    res.json(connections);
+  } catch (error) { res.status(500).json({ error: 'Failed to fetch connections' }); }
 };
