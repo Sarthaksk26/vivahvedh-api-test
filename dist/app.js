@@ -16,6 +16,7 @@ const connection_routes_1 = __importDefault(require("./routes/connection.routes"
 const public_routes_1 = __importDefault(require("./routes/public.routes"));
 const payment_routes_1 = __importDefault(require("./routes/payment.routes"));
 const story_routes_1 = __importDefault(require("./routes/story.routes"));
+const error_middleware_1 = require("./middleware/error.middleware");
 const app = (0, express_1.default)();
 // 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
 app.set('trust proxy', 1);
@@ -60,4 +61,6 @@ app.use((req, res) => {
     console.log(`404 at: ${req.originalUrl}`);
     res.status(404).json({ error: `Path ${req.originalUrl} not found.` });
 });
+// 8. Central Error Handler (MUST be last — 4-argument signature)
+app.use(error_middleware_1.errorHandler);
 exports.default = app;

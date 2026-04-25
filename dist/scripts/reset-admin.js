@@ -8,21 +8,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
+const bcrypt_1 = __importDefault(require("bcrypt"));
 const prisma = new client_1.PrismaClient();
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        const userCount = yield prisma.user.count();
-        const storyCount = yield prisma.successStory.count();
-        const adminUser = yield prisma.user.findFirst({ where: { role: 'ADMIN' } });
-        console.log('--- DATABASE STATUS ---');
-        console.log(`Total Users: ${userCount}`);
-        console.log(`Total Stories: ${storyCount}`);
-        console.log(`Admin User: ${adminUser ? adminUser.regId : 'NONE'}`);
-        if (adminUser) {
-            console.log(`Admin Email: ${adminUser.email}`);
-        }
+        const adminRegId = 'VV-ADMIN1';
+        const newPassword = 'password123';
+        const hashedPassword = yield bcrypt_1.default.hash(newPassword, 10);
+        const updatedAdmin = yield prisma.user.update({
+            where: { regId: adminRegId },
+            data: {
+                password: hashedPassword,
+                accountStatus: 'ACTIVE' // Ensure admin is active
+            }
+        });
+        console.log(`Successfully updated admin user: ${updatedAdmin.regId}`);
+        console.log(`Email: ${updatedAdmin.email}`);
+        console.log(`New password hash: ${hashedPassword}`);
     });
 }
-main().catch(e => console.error(e));
+main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
