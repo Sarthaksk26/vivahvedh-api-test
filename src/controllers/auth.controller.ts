@@ -17,6 +17,12 @@ const registerSchema = z.object({
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
   email: z.string().email(),
+  birthDate: z.string().refine((val) => {
+    const dob = new Date(val);
+    if (isNaN(dob.getTime())) return false;
+    const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    return age >= 18;
+  }, { message: 'Date of Birth is required and must be at least 18 years old.' }),
   profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional()
 });
 
@@ -73,7 +79,8 @@ export const register = async (req: Request, res: Response) => {
             firstName: validatedData.firstName,
             lastName: validatedData.lastName,
             gender: validatedData.gender,
-            maritalStatus: validatedData.maritalStatus
+            maritalStatus: validatedData.maritalStatus,
+            birthDateTime: new Date(validatedData.birthDate)
           }
         }
       },
