@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -12,7 +45,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createOfflineUser = exports.setUserPlan = exports.markEnquiryResolved = exports.replyToEnquiry = exports.getEnquiries = exports.deleteUser = exports.banUser = exports.approveUser = exports.getAllUsers = exports.getPendingApprovals = void 0;
+exports.getConnectionLogs = exports.sendBirthdayWish = exports.getUpcomingBirthdays = exports.updateUserByAdmin = exports.getAdminStats = exports.createOfflineUser = exports.setUserPlan = exports.markEnquiryResolved = exports.replyToEnquiry = exports.getEnquiries = exports.deleteUser = exports.banUser = exports.approveUser = exports.getAllUsers = exports.getPendingApprovals = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const crypto_1 = __importDefault(require("crypto"));
 const db_1 = __importDefault(require("../config/db"));
@@ -49,7 +82,7 @@ exports.getPendingApprovals = getPendingApprovals;
 const getAllUsers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const allUsers = yield db_1.default.user.findMany({
-            where: { accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
+            where: { role: 'USER', accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
             include: { profile: true },
             orderBy: { createdAt: 'desc' }
         });
@@ -293,3 +326,119 @@ const createOfflineUser = (req, res) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.createOfflineUser = createOfflineUser;
+const getAdminStats = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const [totalUsers, activeUsers, pendingApprovals, pendingPayments, totalConnections, thisMonthRegs] = yield Promise.all([
+            db_1.default.user.count({ where: { role: 'USER' } }),
+            db_1.default.user.count({ where: { role: 'USER', accountStatus: 'ACTIVE' } }),
+            db_1.default.user.count({ where: { role: 'USER', accountStatus: 'INACTIVE' } }),
+            db_1.default.pendingPayment.count({ where: { status: 'PENDING' } }),
+            db_1.default.request.count(),
+            db_1.default.user.count({ where: { role: 'USER', createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } })
+        ]);
+        res.json({ totalUsers, activeUsers, pendingApprovals, pendingPayments, totalConnections, thisMonthRegs });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+exports.getAdminStats = getAdminStats;
+const updateUserByAdmin = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const id = req.params.id;
+        const { email, mobile, profile, physical, education, family, astrology } = req.body;
+        const targetUser = yield db_1.default.user.findUnique({ where: { id } });
+        if (!targetUser) {
+            res.status(404).json({ error: 'User not found.' });
+            return;
+        }
+        // Update account-level fields
+        const accountUpdate = {};
+        if (email)
+            accountUpdate.email = email.toLowerCase();
+        if (mobile)
+            accountUpdate.mobile = mobile;
+        const updatedUser = yield db_1.default.user.update({
+            where: { id },
+            data: Object.assign(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({}, accountUpdate), (profile && { profile: { upsert: { create: profile, update: profile } } })), (physical && { physical: { upsert: { create: physical, update: physical } } })), (education && { education: { upsert: { create: education, update: education } } })), (family && { family: { upsert: { create: family, update: family } } })), (astrology && { astrology: { upsert: { create: astrology, update: astrology } } })),
+            include: { profile: true, physical: true, education: true, family: true, astrology: true }
+        });
+        res.json({ message: 'User updated successfully.', user: updatedUser });
+    }
+    catch (error) {
+        if (error.code === 'P2002') {
+            res.status(400).json({ error: 'Email or mobile already in use.' });
+            return;
+        }
+        console.error('Admin Update User Error:', error);
+        res.status(500).json({ error: 'Failed to update user.' });
+    }
+});
+exports.updateUserByAdmin = updateUserByAdmin;
+const getUpcomingBirthdays = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const users = yield db_1.default.user.findMany({
+            where: { role: 'USER', accountStatus: 'ACTIVE', profile: { birthDateTime: { not: null } } },
+            include: { profile: { select: { firstName: true, lastName: true, birthDateTime: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+        const today = new Date();
+        const upcoming = users
+            .filter(u => { var _a; return (_a = u.profile) === null || _a === void 0 ? void 0 : _a.birthDateTime; })
+            .map(u => {
+            const bday = new Date(u.profile.birthDateTime);
+            const nextBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+            if (nextBday < today)
+                nextBday.setFullYear(nextBday.getFullYear() + 1);
+            const daysUntil = Math.ceil((nextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            return { id: u.id, regId: u.regId, email: u.email, mobile: u.mobile, firstName: u.profile.firstName, lastName: u.profile.lastName, birthDate: u.profile.birthDateTime, daysUntil };
+        })
+            .filter(u => u.daysUntil <= 30)
+            .sort((a, b) => a.daysUntil - b.daysUntil);
+        res.json(upcoming);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch birthdays' });
+    }
+});
+exports.getUpcomingBirthdays = getUpcomingBirthdays;
+const sendBirthdayWish = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const id = req.params.id;
+        const user = yield db_1.default.user.findUnique({ where: { id }, include: { profile: true } });
+        if (!user || !user.email) {
+            res.status(404).json({ error: 'User not found or no email.' });
+            return;
+        }
+        const { sendBirthdayWishEmail } = yield Promise.resolve().then(() => __importStar(require('../services/mail.service')));
+        yield sendBirthdayWishEmail(user.email, ((_a = user.profile) === null || _a === void 0 ? void 0 : _a.firstName) || 'Member');
+        res.json({ message: 'Birthday wishes sent!' });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to send wishes' });
+    }
+});
+exports.sendBirthdayWish = sendBirthdayWish;
+const getConnectionLogs = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const status = req.query.status;
+        const where = {};
+        if (status && ['PENDING', 'ACCEPTED', 'REJECTED'].includes(status))
+            where.status = status;
+        const connections = yield db_1.default.request.findMany({
+            where,
+            include: {
+                sender: { include: { profile: { select: { firstName: true, lastName: true } } } },
+                receiver: { include: { profile: { select: { firstName: true, lastName: true } } } }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+        res.json(connections);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to fetch connections' });
+    }
+});
+exports.getConnectionLogs = getConnectionLogs;

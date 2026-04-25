@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendEnquiryReplyEmail = exports.sendOfflineCredentialsEmail = exports.sendEnquiryNotificationEmail = exports.sendStoryApprovedEmail = exports.sendPaymentStatusEmail = exports.sendConnectionAcceptedEmail = exports.sendConnectionRequestEmail = exports.sendApprovalEmail = exports.sendWelcomeEmail = exports.sendMail = void 0;
+exports.sendBirthdayWishEmail = exports.sendEnquiryReplyEmail = exports.sendOfflineCredentialsEmail = exports.sendEnquiryNotificationEmail = exports.sendStoryApprovedEmail = exports.sendPaymentStatusEmail = exports.sendConnectionAcceptedEmail = exports.sendConnectionRequestEmail = exports.sendApprovalEmail = exports.sendWelcomeEmail = exports.sendMail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 // Create a reusable transporter using exactly what we specify in .env
 // We default to a silent fail-catcher if env variables are missing so the app doesn't crash during development
@@ -225,3 +225,18 @@ const sendEnquiryReplyEmail = (to, name, originalMessage, replyMessage) => __awa
     yield (0, exports.sendMail)(to, `Re: Your Enquiry to Vivahvedh`, html);
 });
 exports.sendEnquiryReplyEmail = sendEnquiryReplyEmail;
+const sendBirthdayWishEmail = (to, name) => __awaiter(void 0, void 0, void 0, function* () {
+    const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; padding: 40px;">
+      <h1 style="color: #e11d48;">🎂 Happy Birthday, ${name}!</h1>
+      <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
+      <p>Wishing you a wonderful birthday filled with joy and happiness.</p>
+      <p>May this year bring you your perfect life partner!</p>
+      <div style="margin-top: 30px; font-size: 12px; color: #777;">
+        With love, Vivahvedh Matrimonial Team<br/>
+        © ${new Date().getFullYear()} Vivahvedh Matrimonial
+      </div>
+    </div>`;
+    yield (0, exports.sendMail)(to, `🎂 Happy Birthday ${name}! | Vivahvedh`, html);
+});
+exports.sendBirthdayWishEmail = sendBirthdayWishEmail;

@@ -214,3 +214,18 @@ export const sendEnquiryReplyEmail = async (to: string, name: string, originalMe
   `;
   await sendMail(to, `Re: Your Enquiry to Vivahvedh`, html);
 };
+
+export const sendBirthdayWishEmail = async (to: string, name: string) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; padding: 40px;">
+      <h1 style="color: #e11d48;">🎂 Happy Birthday, ${name}!</h1>
+      <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
+      <p>Wishing you a wonderful birthday filled with joy and happiness.</p>
+      <p>May this year bring you your perfect life partner!</p>
+      <div style="margin-top: 30px; font-size: 12px; color: #777;">
+        With love, Vivahvedh Matrimonial Team<br/>
+        © ${new Date().getFullYear()} Vivahvedh Matrimonial
+      </div>
+    </div>`;
+  await sendMail(to, `🎂 Happy Birthday ${name}! | Vivahvedh`, html);
+};
