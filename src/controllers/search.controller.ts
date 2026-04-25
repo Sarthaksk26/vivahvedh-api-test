@@ -96,12 +96,19 @@ export const getPublicProfile = async (req: Request, res: Response) => {
     const { id } = req.params;
     const viewerId = req.user?.id;
 
+    const isAdmin = req.user?.role === 'ADMIN';
+
+    const whereClause: any = {
+      id: id as string,
+      role: 'USER'
+    };
+    
+    if (!isAdmin) {
+      whereClause.accountStatus = 'ACTIVE';
+    }
+
     const userProfile = await prisma.user.findUnique({
-      where: { 
-        id: id as string,
-        accountStatus: 'ACTIVE',
-        role: 'USER'
-      },
+      where: whereClause,
       include: {
         profile: true,
         family: true,
@@ -129,7 +136,9 @@ export const getPublicProfile = async (req: Request, res: Response) => {
     // Contact Info Check
     let showContactInfo = false;
     
-    if (viewerId && viewerId !== id) {
+    if (isAdmin) {
+      showContactInfo = true;
+    } else if (viewerId && viewerId !== id) {
       // Check if there is an ACCEPTED request between them
       const connection = await prisma.request.findFirst({
         where: {
