@@ -8,9 +8,23 @@ export const sendInterest = async (req: Request, res: Response) => {
     const senderId = req.user.id;
     const { receiverId } = req.body;
 
-    // Security Check: Only ACTIVE users can send proposals
-    if (req.user.accountStatus !== 'ACTIVE') {
+    // Security Check: Verify CURRENT account status from DB (not stale JWT)
+    const currentUser = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: { accountStatus: true, planType: true }
+    });
+
+    if (!currentUser || currentUser.accountStatus !== 'ACTIVE') {
       res.status(403).json({ error: "Your account is currently pending approval. You cannot send match proposals yet." });
+      return;
+    }
+
+    // Plan Check: Only SILVER and GOLD users can send proposals
+    if (currentUser.planType === 'FREE') {
+      res.status(403).json({ 
+        error: "Upgrade to Silver or Gold plan to send match proposals.",
+        code: "PLAN_UPGRADE_REQUIRED"
+      });
       return;
     }
 

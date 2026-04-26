@@ -224,12 +224,27 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
   const subModels = ['profile', 'family', 'education', 'physical', 'astrology', 'preferences'] as const;
 
+  // Before the Prisma update call, check which sub-models exist
+  const existingUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      profile: { select: { id: true } },
+      physical: { select: { id: true } },
+      education: { select: { id: true } },
+      family: { select: { id: true } },
+      astrology: { select: { id: true } },
+      preferences: { select: { id: true } },
+    }
+  });
+
+  // Then for each sub-model, use 'create' if null, 'update' if exists
   for (const key of subModels) {
     const section = data[key];
     if (section && Object.keys(section).length > 0) {
-      prismaData[key] = {
-        upsert: { create: section, update: section },
-      };
+      const exists = existingUser?.[key as keyof typeof existingUser];
+      prismaData[key] = exists 
+        ? { update: section }
+        : { create: section };
     }
   }
 

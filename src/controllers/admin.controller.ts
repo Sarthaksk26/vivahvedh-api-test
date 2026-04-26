@@ -483,3 +483,138 @@ export const getConnectionLogs = async (req: Request, res: Response) => {
     res.json(connections);
   } catch (error) { res.status(500).json({ error: 'Failed to fetch connections' }); }
 };
+
+export const getProfitStats = async (req: Request, res: Response) => {
+  try {
+    // Total revenue from APPROVED payments
+    const approvedPayments = await prisma.pendingPayment.findMany({
+      where: { status: 'APPROVED' },
+      include: {
+        user: {
+          select: {
+            regId: true,
+            profileCreatedBy: true,
+            createdAt: true,
+            profile: { select: { firstName: true, lastName: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const totalRevenue = approvedPayments.reduce((sum, p) => sum + p.amount, 0);
+    
+    const silverRevenue = approvedPayments
+      .filter(p => p.planType === 'SILVER')
+      .reduce((sum, p) => sum + p.amount, 0);
+    
+    const goldRevenue = approvedPayments
+      .filter(p => p.planType === 'GOLD')
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Monthly revenue breakdown (last 12 months)
+    const monthlyRevenue: Record<string, number> = {};
+    approvedPayments.forEach(p => {
+      const month = new Date(p.createdAt).toISOString().slice(0, 7); // YYYY-MM
+      monthlyRevenue[month] = (monthlyRevenue[month] || 0) + p.amount;
+    });
+
+    // Online vs Offline user counts
+    // Offline = profileCreatedBy not null and not 'Self' (admin-created)
+    const [onlineUsers, offlineUsers] = await Promise.all([
+      prisma.user.count({ 
+        where: { 
+          role: 'USER',
+          OR: [
+            { profileCreatedBy: null },
+            { profileCreatedBy: 'Self' },
+            { profileCreatedBy: 'Father' },
+            { profileCreatedBy: 'Mother' },
+            { profileCreatedBy: 'Sibling' },
+            { profileCreatedBy: 'Relative' },
+            { profileCreatedBy: 'Friend' },
+          ]
+        } 
+      }),
+      prisma.user.count({ 
+        where: { 
+          role: 'USER',
+          profileCreatedBy: 'Marriage Bureau'  // Admin-created via offline form
+        } 
+      }),
+    ]);
+
+    // Plan distribution
+    const planDistribution = await prisma.user.groupBy({
+      by: ['planType'],
+      where: { role: 'USER' },
+      _count: { planType: true }
+    });
+
+    // Recent payments (last 10)
+    const recentPayments = approvedPayments.slice(0, 10).map(p => ({
+      id: p.id,
+      regId: p.user.regId,
+      name: `${p.user.profile?.firstName || ''} ${p.user.profile?.lastName || ''}`.trim(),
+      planType: p.planType,
+      amount: p.amount,
+      createdAt: p.createdAt,
+      isOffline: p.user.profileCreatedBy === 'Marriage Bureau'
+    }));
+
+    res.json({
+      totalRevenue,
+      silverRevenue,
+      goldRevenue,
+      totalTransactions: approvedPayments.length,
+      monthlyRevenue,
+      onlineUsers,
+      offlineUsers,
+      planDistribution: planDistribution.map(p => ({
+        plan: p.planType,
+        count: p._count.planType
+      })),
+      recentPayments
+    });
+  } catch (error) {
+    console.error('Profit Stats Error:', error);
+    res.status(500).json({ error: 'Failed to fetch profit statistics.' });
+  }
+};
+
+export const getAllUsersWithLocation = async (req: Request, res: Response) => {
+  try {
+    const { city, district, state, gender, planType, accountStatus } = req.query;
+
+    const where: any = { role: 'USER' };
+    
+    if (accountStatus) where.accountStatus = String(accountStatus);
+    if (planType) where.planType = String(planType);
+    if (gender) where.profile = { ...where.profile, gender: String(gender).toUpperCase() };
+
+    // Location filter - search in family.motherHometown and education.jobAddress
+    if (city || district) {
+      const locationSearch = String(city || district);
+      where.OR = [
+        { family: { motherHometown: { contains: locationSearch, mode: 'insensitive' } } },
+        { education: { jobAddress: { contains: locationSearch, mode: 'insensitive' } } },
+        { profile: { birthPlace: { contains: locationSearch, mode: 'insensitive' } } }
+      ];
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      include: {
+        profile: { select: { firstName: true, lastName: true, gender: true, maritalStatus: true, birthPlace: true } },
+        family: { select: { motherHometown: true } },
+        education: { select: { jobBusiness: true, jobAddress: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch users by location.' });
+  }
+};
