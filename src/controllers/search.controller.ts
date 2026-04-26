@@ -25,51 +25,64 @@ export const executeSearch = async (req: Request, res: Response) => {
       }
     }
 
-    // Ensure there's a valid object construction for the profile
-    let baseWhere: any = {
-      accountStatus: 'ACTIVE',
-      role: 'USER'
-    };
+    // Build conditions array for consistent AND logic
+    const conditions: any[] = [
+      { accountStatus: 'ACTIVE' },
+      { role: 'USER' }
+    ];
 
+    // Profile Filters
     if (Object.keys(profileFilters).length > 0) {
-      baseWhere.profile = { is: profileFilters };
+      conditions.push({ profile: { is: profileFilters } });
     } else {
-      baseWhere.profile = { isNot: null };
+      conditions.push({ profile: { isNot: null } });
     }
 
+    // Physical Filters
     if (height || diet) {
-      baseWhere.physical = { is: {} };
-      if (height) baseWhere.physical.is.height = { contains: String(height), mode: 'insensitive' };
-      if (diet) baseWhere.physical.is.diet = { contains: String(diet), mode: 'insensitive' };
+      const physicalFilter: any = {};
+      if (height) physicalFilter.height = { contains: String(height), mode: 'insensitive' };
+      if (diet) physicalFilter.diet = { contains: String(diet), mode: 'insensitive' };
+      conditions.push({ physical: { is: physicalFilter } });
     }
 
+    // Education Filters
     if (trade || occupation) {
-      baseWhere.education = { is: {} };
-      if (trade) baseWhere.education.is.trade = { contains: String(trade), mode: 'insensitive' };
-      if (occupation) baseWhere.education.is.jobBusiness = { contains: String(occupation), mode: 'insensitive' };
+      const educationFilter: any = {};
+      if (trade) educationFilter.trade = { contains: String(trade), mode: 'insensitive' };
+      if (occupation) educationFilter.jobBusiness = { contains: String(occupation), mode: 'insensitive' };
+      conditions.push({ education: { is: educationFilter } });
     }
 
+    // Location Filters
     if (location) {
        const locStr = String(location);
-       baseWhere.addresses = {
-         some: {
-           OR: [
-             { city: { contains: locStr, mode: 'insensitive' } },
-             { district: { contains: locStr, mode: 'insensitive' } },
-             { state: { contains: locStr, mode: 'insensitive' } }
-           ]
+       conditions.push({
+         addresses: {
+           some: {
+             OR: [
+               { city: { contains: locStr, mode: 'insensitive' } },
+               { district: { contains: locStr, mode: 'insensitive' } },
+               { state: { contains: locStr, mode: 'insensitive' } }
+             ]
+           }
          }
-       };
+       });
     }
 
+    // Keyword Search (q) - Applied as an OR within the filtered results
     if (q) {
       const qStr = String(q);
-      baseWhere.OR = [
-        { regId: { contains: qStr.toUpperCase() } },
-        { profile: { is: { firstName: { contains: qStr, mode: 'insensitive' } } } },
-        { profile: { is: { lastName: { contains: qStr, mode: 'insensitive' } } } }
-      ];
+      conditions.push({
+        OR: [
+          { regId: { contains: qStr.toUpperCase() } },
+          { profile: { is: { firstName: { contains: qStr, mode: 'insensitive' } } } },
+          { profile: { is: { lastName: { contains: qStr, mode: 'insensitive' } } } }
+        ]
+      });
     }
+
+    const baseWhere = { AND: conditions };
 
     const pageNumber = parseInt(String(page)) || 1;
     const pageSize = parseInt(String(limit)) || 20;
