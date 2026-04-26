@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  const payments = await prisma.payment.findMany({
+  const payments = await prisma.pendingPayment.findMany({
     include: { user: true },
     orderBy: { createdAt: 'desc' },
     take: 5
