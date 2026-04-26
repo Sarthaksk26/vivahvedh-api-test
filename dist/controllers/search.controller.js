@@ -17,8 +17,7 @@ const db_1 = __importDefault(require("../config/db"));
 const sanitize_1 = require("../utils/sanitize");
 const executeSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Extract search filters from query parameters
-        const { gender, maritalStatus, casteId, q, page = '1', limit = '20' } = req.query;
+        const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, page = '1', limit = '20' } = req.query;
         let profileFilters = {};
         if (gender)
             profileFilters.gender = String(gender).toUpperCase();
@@ -26,6 +25,18 @@ const executeSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             profileFilters.maritalStatus = String(maritalStatus).toUpperCase();
         if (casteId)
             profileFilters.casteId = parseInt(String(casteId));
+        if (ageMin || ageMax) {
+            profileFilters.birthDateTime = {};
+            const today = new Date();
+            if (ageMax) {
+                const minDate = new Date(today.getFullYear() - parseInt(String(ageMax)) - 1, today.getMonth(), today.getDate());
+                profileFilters.birthDateTime.gte = minDate;
+            }
+            if (ageMin) {
+                const maxDate = new Date(today.getFullYear() - parseInt(String(ageMin)), today.getMonth(), today.getDate());
+                profileFilters.birthDateTime.lte = maxDate;
+            }
+        }
         // Ensure there's a valid object construction for the profile
         let baseWhere = {
             accountStatus: 'ACTIVE',
@@ -36,6 +47,32 @@ const executeSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         }
         else {
             baseWhere.profile = { isNot: null };
+        }
+        if (height || diet) {
+            baseWhere.physical = { is: {} };
+            if (height)
+                baseWhere.physical.is.height = { contains: String(height), mode: 'insensitive' };
+            if (diet)
+                baseWhere.physical.is.diet = { contains: String(diet), mode: 'insensitive' };
+        }
+        if (trade || occupation) {
+            baseWhere.education = { is: {} };
+            if (trade)
+                baseWhere.education.is.trade = { contains: String(trade), mode: 'insensitive' };
+            if (occupation)
+                baseWhere.education.is.jobBusiness = { contains: String(occupation), mode: 'insensitive' };
+        }
+        if (location) {
+            const locStr = String(location);
+            baseWhere.addresses = {
+                some: {
+                    OR: [
+                        { city: { contains: locStr, mode: 'insensitive' } },
+                        { district: { contains: locStr, mode: 'insensitive' } },
+                        { state: { contains: locStr, mode: 'insensitive' } }
+                    ]
+                }
+            };
         }
         if (q) {
             const qStr = String(q);
@@ -98,16 +135,20 @@ const executeSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
 });
 exports.executeSearch = executeSearch;
 const getPublicProfile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+    var _a, _b;
     try {
         const { id } = req.params;
         const viewerId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const isAdmin = ((_b = req.user) === null || _b === void 0 ? void 0 : _b.role) === 'ADMIN';
+        const whereClause = {
+            id: id,
+            role: 'USER'
+        };
+        if (!isAdmin) {
+            whereClause.accountStatus = 'ACTIVE';
+        }
         const userProfile = yield db_1.default.user.findUnique({
-            where: {
-                id: id,
-                accountStatus: 'ACTIVE',
-                role: 'USER'
-            },
+            where: whereClause,
             include: {
                 profile: true,
                 family: true,
@@ -131,7 +172,10 @@ const getPublicProfile = (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         // Contact Info Check
         let showContactInfo = false;
-        if (viewerId && viewerId !== id) {
+        if (isAdmin) {
+            showContactInfo = true;
+        }
+        else if (viewerId && viewerId !== id) {
             // Check if there is an ACCEPTED request between them
             const connection = yield db_1.default.request.findFirst({
                 where: {

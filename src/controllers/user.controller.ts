@@ -86,6 +86,14 @@ const preferencesSchema = z.object({
   expectations: z.string().max(2000).optional().nullable(),
 }).strict();
 
+const addressSchema = z.object({
+  city:        z.string().max(100).optional().nullable(),
+  district:    z.string().max(100).optional().nullable(),
+  state:       z.string().max(100).optional().nullable(),
+  addressLine: z.string().max(300).optional().nullable(),
+  addressType: z.string().default('PERMANENT'),
+}).strict();
+
 const updateProfileBodySchema = z.object({
   profile:     profileSchema.optional(),
   family:      familySchema.optional(),
@@ -93,6 +101,7 @@ const updateProfileBodySchema = z.object({
   physical:    physicalSchema.optional(),
   astrology:   astrologySchema.optional(),
   preferences: preferencesSchema.optional(),
+  addresses:   addressSchema.optional(),
 }).strict();
 
 // ═══════════════════════════════════════════════════════════════════
@@ -224,6 +233,13 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
+  if (data.addresses && Object.keys(data.addresses).length > 0) {
+    prismaData.addresses = {
+      deleteMany: {}, // Clear old addresses and replace with new
+      create: [data.addresses]
+    };
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: prismaData,
@@ -234,6 +250,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
       physical: true,
       astrology: true,
       preferences: true,
+      addresses: true,
     },
   });
 

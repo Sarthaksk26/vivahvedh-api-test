@@ -104,6 +104,13 @@ const astrologySchema = zod_1.z.object({
 const preferencesSchema = zod_1.z.object({
     expectations: zod_1.z.string().max(2000).optional().nullable(),
 }).strict();
+const addressSchema = zod_1.z.object({
+    city: zod_1.z.string().max(100).optional().nullable(),
+    district: zod_1.z.string().max(100).optional().nullable(),
+    state: zod_1.z.string().max(100).optional().nullable(),
+    addressLine: zod_1.z.string().max(300).optional().nullable(),
+    addressType: zod_1.z.string().default('PERMANENT'),
+}).strict();
 const updateProfileBodySchema = zod_1.z.object({
     profile: profileSchema.optional(),
     family: familySchema.optional(),
@@ -111,6 +118,7 @@ const updateProfileBodySchema = zod_1.z.object({
     physical: physicalSchema.optional(),
     astrology: astrologySchema.optional(),
     preferences: preferencesSchema.optional(),
+    addresses: addressSchema.optional(),
 }).strict();
 // ═══════════════════════════════════════════════════════════════════
 // Safe file-path helper — prevents path-traversal attacks
@@ -220,6 +228,12 @@ exports.updateProfile = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter
             };
         }
     }
+    if (data.addresses && Object.keys(data.addresses).length > 0) {
+        prismaData.addresses = {
+            deleteMany: {}, // Clear old addresses and replace with new
+            create: [data.addresses]
+        };
+    }
     const updatedUser = yield db_1.default.user.update({
         where: { id: userId },
         data: prismaData,
@@ -230,6 +244,7 @@ exports.updateProfile = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter
             physical: true,
             astrology: true,
             preferences: true,
+            addresses: true,
         },
     });
     res.status(200).json({
