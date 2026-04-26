@@ -356,10 +356,50 @@ export const getAdminStats = async (req: Request, res: Response) => {
   } catch (error) { res.status(500).json({ error: 'Failed to fetch stats' }); }
 };
 
+const updateUserByAdminSchema = z.object({
+  email: z.string().email().optional(),
+  mobile: z.string().min(10).max(15).optional(),
+  profile: z.object({
+    firstName: z.string().min(1).max(100).optional(),
+    lastName: z.string().min(1).max(100).optional(),
+    gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
+    maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']).optional(),
+    birthDateTime: z.string().optional().nullable(),
+    birthPlace: z.string().max(200).optional().nullable(),
+    aboutMe: z.string().max(2000).optional().nullable(),
+  }).optional(),
+  physical: z.object({
+    height: z.string().max(50).optional().nullable(),
+    weight: z.number().int().min(20).max(300).optional().nullable(),
+    bloodGroup: z.string().max(10).optional().nullable(),
+    complexion: z.string().max(50).optional().nullable(),
+    diet: z.string().max(50).optional().nullable(),
+  }).optional(),
+  education: z.object({
+    trade: z.string().max(200).optional().nullable(),
+    college: z.string().max(300).optional().nullable(),
+    jobBusiness: z.string().max(300).optional().nullable(),
+    annualIncome: z.string().max(100).optional().nullable(),
+  }).optional(),
+  family: z.object({
+    fatherName: z.string().max(100).optional().nullable(),
+    motherName: z.string().max(100).optional().nullable(),
+    familyBackground: z.string().max(1000).optional().nullable(),
+    motherHometown: z.string().max(200).optional().nullable(),
+  }).optional(),
+  astrology: z.object({
+    gothra: z.string().max(100).optional().nullable(),
+    rashi: z.string().max(100).optional().nullable(),
+    nakshatra: z.string().max(100).optional().nullable(),
+    mangal: z.string().max(50).optional().nullable(),
+  }).optional(),
+}).strict();
+
 export const updateUserByAdmin = async (req: Request, res: Response) => {
   try {
     const id = req.params.id as string;
-    const { email, mobile, profile, physical, education, family, astrology } = req.body;
+    const validated = updateUserByAdminSchema.parse(req.body);
+    const { email, mobile, profile, physical, education, family, astrology } = validated;
 
     const targetUser = await prisma.user.findUnique({ where: { id } });
     if (!targetUser) { res.status(404).json({ error: 'User not found.' }); return; }
@@ -383,6 +423,7 @@ export const updateUserByAdmin = async (req: Request, res: Response) => {
     });
     res.json({ message: 'User updated successfully.', user: updatedUser });
   } catch (error: any) {
+    if (error instanceof z.ZodError) { res.status(400).json({ error: error.issues }); return; }
     if (error.code === 'P2002') { res.status(400).json({ error: 'Email or mobile already in use.' }); return; }
     console.error('Admin Update User Error:', error);
     res.status(500).json({ error: 'Failed to update user.' });

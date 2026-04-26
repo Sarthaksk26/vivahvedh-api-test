@@ -31,12 +31,19 @@ export const executeSearch = async (req: Request, res: Response) => {
       { role: 'USER' }
     ];
 
-    // Profile Filters
+    // Security: Never show the current user in their own search results
+    if (req.user?.id) {
+      conditions.push({ id: { not: req.user.id } });
+    }
+
+    // Profile Filters - Merging them into the AND stack
     if (Object.keys(profileFilters).length > 0) {
       conditions.push({ profile: { is: profileFilters } });
     } else {
+      // Ensure we only show users who have at least a basic profile
       conditions.push({ profile: { isNot: null } });
     }
+
 
     // Physical Filters
     if (height || diet) {

@@ -128,7 +128,14 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  // Block login for suspended or deleted accounts
+  if (user.accountStatus === 'SUSPENDED' || user.accountStatus === 'DELETED') {
+    res.status(403).json({ error: 'Your account has been suspended or deleted. Please contact support.' });
+    return;
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
+
 
   if (!isMatch) {
     res.status(401).json({ error: 'Invalid credentials.' });

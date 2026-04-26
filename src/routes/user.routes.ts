@@ -4,15 +4,16 @@ import {
   changePassword, shortlistProfile, getMyShortlist,
   getProfileViewers
 } from '../controllers/user.controller';
-import { requireAuth, requireActivePassword } from '../middleware/auth.middleware';
+import { requireAuth, requireActivePassword, requireActiveAccount } from '../middleware/auth.middleware';
 import { upload, processImage } from '../config/multer';
 
 const router = Router();
 
-// All user routes require auth + active password (except change-password)
+// All user routes require auth + active password + active account status check
 router.post('/change-password', requireAuth, changePassword);
 
-router.use(requireAuth, requireActivePassword);
+router.use(requireAuth, requireActivePassword, requireActiveAccount);
+
 
 router.get('/profile', getMyProfile);
 router.post('/upload-photo', upload.single('photo'), processImage, uploadPhoto);
