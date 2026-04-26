@@ -4,14 +4,26 @@ import { maskPrivateDetails } from '../utils/sanitize';
 
 export const executeSearch = async (req: Request, res: Response) => {
   try {
-    // Extract search filters from query parameters
-    const { gender, maritalStatus, casteId, q, page = '1', limit = '20' } = req.query;
+    const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, page = '1', limit = '20' } = req.query;
 
     let profileFilters: any = {};
 
     if (gender) profileFilters.gender = String(gender).toUpperCase();
     if (maritalStatus) profileFilters.maritalStatus = String(maritalStatus).toUpperCase();
     if (casteId) profileFilters.casteId = parseInt(String(casteId));
+
+    if (ageMin || ageMax) {
+      profileFilters.birthDateTime = {};
+      const today = new Date();
+      if (ageMax) {
+         const minDate = new Date(today.getFullYear() - parseInt(String(ageMax)) - 1, today.getMonth(), today.getDate());
+         profileFilters.birthDateTime.gte = minDate;
+      }
+      if (ageMin) {
+         const maxDate = new Date(today.getFullYear() - parseInt(String(ageMin)), today.getMonth(), today.getDate());
+         profileFilters.birthDateTime.lte = maxDate;
+      }
+    }
 
     // Ensure there's a valid object construction for the profile
     let baseWhere: any = {
@@ -23,6 +35,31 @@ export const executeSearch = async (req: Request, res: Response) => {
       baseWhere.profile = { is: profileFilters };
     } else {
       baseWhere.profile = { isNot: null };
+    }
+
+    if (height || diet) {
+      baseWhere.physical = { is: {} };
+      if (height) baseWhere.physical.is.height = { contains: String(height), mode: 'insensitive' };
+      if (diet) baseWhere.physical.is.diet = { contains: String(diet), mode: 'insensitive' };
+    }
+
+    if (trade || occupation) {
+      baseWhere.education = { is: {} };
+      if (trade) baseWhere.education.is.trade = { contains: String(trade), mode: 'insensitive' };
+      if (occupation) baseWhere.education.is.jobBusiness = { contains: String(occupation), mode: 'insensitive' };
+    }
+
+    if (location) {
+       const locStr = String(location);
+       baseWhere.addresses = {
+         some: {
+           OR: [
+             { city: { contains: locStr, mode: 'insensitive' } },
+             { district: { contains: locStr, mode: 'insensitive' } },
+             { state: { contains: locStr, mode: 'insensitive' } }
+           ]
+         }
+       };
     }
 
     if (q) {

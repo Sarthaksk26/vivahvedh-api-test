@@ -81,8 +81,44 @@ const getPendingApprovals = (req, res) => __awaiter(void 0, void 0, void 0, func
 exports.getPendingApprovals = getPendingApprovals;
 const getAllUsers = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const { q, gender, ageMin, ageMax, accountStatus } = req.query;
+        let baseWhere = {
+            role: 'USER',
+        };
+        if (accountStatus) {
+            baseWhere.accountStatus = String(accountStatus).toUpperCase();
+        }
+        else {
+            baseWhere.accountStatus = { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] };
+        }
+        let profileFilters = {};
+        if (gender)
+            profileFilters.gender = String(gender).toUpperCase();
+        if (ageMin || ageMax) {
+            profileFilters.birthDateTime = {};
+            const today = new Date();
+            if (ageMax) {
+                const minDate = new Date(today.getFullYear() - parseInt(String(ageMax)) - 1, today.getMonth(), today.getDate());
+                profileFilters.birthDateTime.gte = minDate;
+            }
+            if (ageMin) {
+                const maxDate = new Date(today.getFullYear() - parseInt(String(ageMin)), today.getMonth(), today.getDate());
+                profileFilters.birthDateTime.lte = maxDate;
+            }
+        }
+        if (Object.keys(profileFilters).length > 0) {
+            baseWhere.profile = { is: profileFilters };
+        }
+        if (q) {
+            const qStr = String(q);
+            baseWhere.OR = [
+                { regId: { contains: qStr, mode: 'insensitive' } },
+                { profile: { is: { firstName: { contains: qStr, mode: 'insensitive' } } } },
+                { profile: { is: { lastName: { contains: qStr, mode: 'insensitive' } } } },
+            ];
+        }
         const allUsers = yield db_1.default.user.findMany({
-            where: { role: 'USER', accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
+            where: baseWhere,
             include: { profile: true },
             orderBy: { createdAt: 'desc' }
         });

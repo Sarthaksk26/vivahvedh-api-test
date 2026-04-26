@@ -137,6 +137,9 @@ model UserAddress {
   userId      String
   addressType String
   addressLine String?
+  city        String?
+  district    String?
+  state       String?
   talukaId    Int?
   districtId  Int?
   stateId     Int?

@@ -32,8 +32,49 @@ export const getPendingApprovals = async (req: Request, res: Response) => {
 
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
+    const { q, gender, ageMin, ageMax, accountStatus } = req.query;
+
+    let baseWhere: any = {
+      role: 'USER',
+    };
+
+    if (accountStatus) {
+      baseWhere.accountStatus = String(accountStatus).toUpperCase();
+    } else {
+      baseWhere.accountStatus = { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] };
+    }
+
+    let profileFilters: any = {};
+    if (gender) profileFilters.gender = String(gender).toUpperCase();
+
+    if (ageMin || ageMax) {
+      profileFilters.birthDateTime = {};
+      const today = new Date();
+      if (ageMax) {
+         const minDate = new Date(today.getFullYear() - parseInt(String(ageMax)) - 1, today.getMonth(), today.getDate());
+         profileFilters.birthDateTime.gte = minDate;
+      }
+      if (ageMin) {
+         const maxDate = new Date(today.getFullYear() - parseInt(String(ageMin)), today.getMonth(), today.getDate());
+         profileFilters.birthDateTime.lte = maxDate;
+      }
+    }
+
+    if (Object.keys(profileFilters).length > 0) {
+      baseWhere.profile = { is: profileFilters };
+    }
+
+    if (q) {
+      const qStr = String(q);
+      baseWhere.OR = [
+        { regId: { contains: qStr, mode: 'insensitive' } },
+        { profile: { is: { firstName: { contains: qStr, mode: 'insensitive' } } } },
+        { profile: { is: { lastName: { contains: qStr, mode: 'insensitive' } } } },
+      ];
+    }
+
     const allUsers = await prisma.user.findMany({
-      where: { role: 'USER', accountStatus: { in: ['ACTIVE', 'INACTIVE', 'SUSPENDED'] } },
+      where: baseWhere,
       include: { profile: true },
       orderBy: { createdAt: 'desc' }
     });
