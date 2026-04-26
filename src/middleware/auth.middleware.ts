@@ -37,14 +37,26 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-/** Attaches user if a valid JWT is present; does NOT block if absent. */
-export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
+/** Attaches user if a valid JWT is present; does NOT block if absent. Checks for suspension. */
+export const optionalAuth = async (req: Request, _res: Response, next: NextFunction) => {
   const token = extractToken(req);
   if (token) {
-    try { req.user = verifyToken(token); } catch { /* ignore */ }
+    try { 
+      const decoded: any = verifyToken(token); 
+      const prisma = (await import('../config/db')).default;
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: { id: true, role: true, accountStatus: true, planType: true, planExpiresAt: true, requiresPasswordChange: true }
+      });
+
+      if (user && user.accountStatus !== 'SUSPENDED' && user.accountStatus !== 'DELETED') {
+        req.user = user;
+      }
+    } catch { /* ignore invalid tokens */ }
   }
   next();
 };
+
 
 /** Requires `role === 'ADMIN'` on an already-authenticated request. */
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -79,3 +91,63 @@ export const requireActivePassword = (req: Request, res: Response, next: NextFun
 
   next();
 };
+
+
+/** 
+ * Strict check for account status. 
+ * Rejects if user is SUSPENDED or DELETED.
+ * Fetches latest status from DB to bypass stale JWTs.
+ */
+export const requireActiveAccount = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) return next();
+
+  try {
+    // Check Plan Expiry
+    if (req.user.planType !== 'FREE' && req.user.planExpiresAt) {
+      const now = new Date();
+      const expiresAt = new Date(req.user.planExpiresAt);
+      if (now > expiresAt) {
+        const prisma = (await import('../config/db')).default;
+        await prisma.user.update({
+          where: { id: req.user.id },
+          data: { planType: 'FREE', planExpiresAt: null }
+        });
+        req.user.planType = 'FREE';
+        req.user.planExpiresAt = null;
+        console.log(`[Plan Expiry] User ${req.user.id} downgraded to FREE`);
+      }
+    }
+
+    const prisma = (await import('../config/db')).default;
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { accountStatus: true }
+    });
+
+    if (!user || user.accountStatus === 'SUSPENDED' || user.accountStatus === 'DELETED') {
+      return res.status(403).json({ 
+        error: 'Your account has been suspended or deleted. Please contact support.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
+    }
+
+    if (user.accountStatus === 'INACTIVE') {
+      // Allow access to own profile/auth routes so they can complete profile or check status
+      const allowed = ['/api/user/profile', '/api/user/update', '/api/user/upload-photo', '/api/user/change-password', '/api/auth/login'];
+      const isAllowed = allowed.some(p => req.originalUrl.startsWith(p));
+      
+      if (!isAllowed) {
+        return res.status(403).json({ 
+          error: 'Your account is pending admin approval. Access to this feature is restricted.',
+          code: 'ACCOUNT_INACTIVE'
+        });
+      }
+    }
+
+    next();
+  } catch (error) {
+    console.error('[requireActiveAccount Error]', error);
+    res.status(500).json({ error: 'Internal server error during account verification.' });
+  }
+};
+

@@ -12,6 +12,15 @@ export const verifyPayment = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required payment details.' });
     }
 
+    if (!['SILVER', 'GOLD'].includes(planType)) {
+      return res.status(400).json({ error: 'Invalid plan type for payment.' });
+    }
+
+    const expectedAmount = planType === 'GOLD' ? 5000 : 2000;
+    if (parseFloat(amount) !== expectedAmount) {
+      return res.status(400).json({ error: `Amount must be ₹${expectedAmount} for the ${planType} plan.` });
+    }
+
     if (!file) {
       return res.status(400).json({ error: 'Payment screenshot is required.' });
     }

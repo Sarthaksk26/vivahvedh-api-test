@@ -163,3 +163,29 @@ export const getMyConnections = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to fetch connections." });
   }
 };
+
+// 5. Withdraw a Pending Request
+export const withdrawInterest = async (req: Request, res: Response) => {
+  try {
+    const senderId = req.user.id;
+    const { requestId } = req.body;
+
+    const result = await prisma.request.deleteMany({
+      where: {
+        id: requestId,
+        senderId,        // only the original sender can withdraw
+        status: 'PENDING' // can only withdraw pending requests
+      }
+    });
+
+    if (result.count === 0) {
+      res.status(404).json({ error: 'Request not found, not yours, or already actioned.' });
+      return;
+    }
+
+    res.status(200).json({ message: 'Match proposal withdrawn successfully.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to withdraw request.' });
+  }
+};
+
