@@ -14,8 +14,11 @@ import {
   updateUserByAdmin,
   getUpcomingBirthdays,
   sendBirthdayWish,
-  getConnectionLogs
+  getConnectionLogs,
+  getProfitStats,
+  getAllUsersWithLocation
 } from '../controllers/admin.controller';
+import { getAdminNotifications } from '../controllers/notification.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -23,11 +26,17 @@ const router = Router();
 // @route   GET /api/admin/stats
 router.get('/stats', requireAuth, requireAdmin, getAdminStats);
 
+// Notifications
+router.get('/notifications', requireAuth, requireAdmin, getAdminNotifications);
+
 // @route   GET /api/admin/pending
 router.get('/pending', requireAuth, requireAdmin, getPendingApprovals);
 
 // @route   GET /api/admin/all-users
 router.get('/all-users', requireAuth, requireAdmin, getAllUsers);
+
+// Location-based user search (must be before /users/:id to avoid route conflict)
+router.get('/users/by-location', requireAuth, requireAdmin, getAllUsersWithLocation);
 
 // @route   PATCH /api/admin/users/:id
 router.patch('/users/:id', requireAuth, requireAdmin, updateUserByAdmin);
@@ -62,5 +71,8 @@ router.post('/birthdays/send-wishes/:id', requireAuth, requireAdmin, sendBirthda
 
 // Connections
 router.get('/connections', requireAuth, requireAdmin, getConnectionLogs);
+
+// Profit Tracker
+router.get('/profit', requireAuth, requireAdmin, getProfitStats);
 
 export default router;

@@ -57,6 +57,10 @@ export const errorHandler = (
   }
 
   // ── Fallback — unexpected error ───────────────────────────────────
-  console.error('Unhandled Error:', err);
+  console.error('Unhandled Error:', {
+    name: err.name,
+    message: err.message,
+    stack: err.stack,
+  });
   res.status(500).json({ error: 'Internal Server Error.' });
 };
