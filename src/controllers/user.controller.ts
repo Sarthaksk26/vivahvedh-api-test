@@ -22,9 +22,15 @@ const profileSchema = z.object({
   gender:        z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']).optional(),
   birthDateTime: z.string().optional().nullable().transform((val) => {
-    if (!val) return null;
-    // Parse at UTC noon to prevent IST timezone shift
-    return new Date(`${val.slice(0, 10)}T12:00:00Z`);
+    if (!val || val.trim() === '') return null;
+    try {
+      // Parse at UTC noon to prevent IST timezone shift
+      const dateStr = val.slice(0, 10);
+      if (dateStr.length < 10) return null;
+      return new Date(`${dateStr}T12:00:00Z`);
+    } catch (e) {
+      return null;
+    }
   }),
   birthPlace:    z.string().max(200).optional().nullable(),
   aboutMe:       z.string().max(2000).optional().nullable(),
@@ -263,9 +269,9 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
   // Then for each sub-model, use 'create' if null, 'update' if exists
   for (const key of subModels) {
-    const section = data[key];
+    const section = (data as any)[key];
     if (section && Object.keys(section).length > 0) {
-      const exists = existingUser?.[key as keyof typeof existingUser];
+      const exists = (existingUser as any)?.[key];
       prismaData[key] = exists 
         ? { update: section }
         : { create: section };

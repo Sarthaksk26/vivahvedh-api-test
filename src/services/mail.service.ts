@@ -271,3 +271,25 @@ export const sendPasswordChangedEmail = async (to: string, regId: string) => {
   
   await sendMail(to, '🔐 Password Changed | Vivahvedh Account Security', html);
 };
+
+/**
+ * Notify admin of system events (New Registration, Proposals, Stories, etc.)
+ */
+export const sendAdminNotification = async (event: string, details: string) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER || '';
+  if (!adminEmail) return;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+      <h2 style="color: #e11d48; border-bottom: 2px solid #e11d48; padding-bottom: 10px;">Admin Alert: ${event}</h2>
+      <div style="padding: 15px; background: #f9f9f9; border-radius: 5px; margin-top: 20px;">
+        ${details}
+      </div>
+      <p style="font-size: 12px; color: #999; margin-top: 20px;">
+        This is an automated notification from the Vivahvedh Backend.
+      </p>
+    </div>
+  `;
+  
+  await sendMail(adminEmail, `[Vivahvedh Admin] ${event}`, html);
+};

@@ -98,6 +98,17 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       .catch(err => console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message));
   }
 
+  // Notify Admin of new registration
+  const { sendAdminNotification } = await import('../services/mail.service');
+  sendAdminNotification(
+    'New User Registered',
+    `<p><b>Name:</b> ${validatedData.firstName} ${validatedData.lastName}</p>
+     <p><b>RegID:</b> ${newRegId}</p>
+     <p><b>Email:</b> ${emailLower}</p>
+     <p><b>Mobile:</b> ${validatedData.mobile}</p>
+     <p>Please review and approve this profile in the admin panel.</p>`
+  ).catch(e => console.error("Admin Notify Error:", e));
+
   res.status(201).json({
     message: 'Registration successful! Awaiting admin approval.',
     regId: newUser.regId
