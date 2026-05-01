@@ -79,6 +79,14 @@ export const sendInterest = async (req: Request, res: Response) => {
         receiverData.profile?.firstName || 'Member', 
         `${senderData.profile?.firstName} ${senderData.profile?.lastName}`
       );
+
+      // Notify Admin
+      const { sendAdminNotification } = await import('../services/mail.service');
+      sendAdminNotification(
+        'New Match Proposal Sent',
+        `<p><b>Sender:</b> ${senderData.profile?.firstName} ${senderData.profile?.lastName} (${senderData.regId})</p>
+         <p><b>Receiver:</b> ${receiverData.profile?.firstName} ${receiverData.profile?.lastName} (${receiverData.regId})</p>`
+      ).catch(() => {});
     }
 
     res.status(200).json({ message: "Interest expressed successfully!", request: newRequest });
@@ -126,6 +134,14 @@ export const acceptInterest = async (req: Request, res: Response) => {
         senderData.profile?.firstName || 'Member',
         `${receiverData.profile?.firstName} ${receiverData.profile?.lastName}`
       );
+
+      // Notify Admin
+      const { sendAdminNotification } = await import('../services/mail.service');
+      sendAdminNotification(
+        'Match Proposal Accepted',
+        `<p><b>Accepter:</b> ${receiverData.profile?.firstName} ${receiverData.profile?.lastName} (${receiverData.regId})</p>
+         <p><b>Original Sender:</b> ${senderData.profile?.firstName} ${senderData.profile?.lastName} (${senderData.regId})</p>`
+      ).catch(() => {});
     }
 
     res.status(200).json({ message: "Request accepted! You are now connected.", request: updatedRequest });
@@ -140,14 +156,25 @@ export const rejectInterest = async (req: Request, res: Response) => {
     const receiverId = req.user.id;
     const { requestId } = req.body;
 
-    const request = await prisma.request.updateMany({
+    const request = await prisma.request.findUnique({ where: { id: requestId } });
+    
+    const updateResult = await prisma.request.updateMany({
       where: { id: requestId, receiverId, status: 'PENDING' },
       data: { status: 'REJECTED' }
     });
 
-    if (request.count === 0) {
+    if (updateResult.count === 0) {
       res.status(404).json({ error: "Request not found" });
       return;
+    }
+
+    // Notify Admin of rejection
+    if (request) {
+      const { sendAdminNotification } = await import('../services/mail.service');
+      sendAdminNotification(
+        'Match Proposal Declined',
+        `<p>Connection ID: ${requestId} was declined by the receiver.</p>`
+      ).catch(() => {});
     }
 
     res.status(200).json({ message: "Request rejected." });

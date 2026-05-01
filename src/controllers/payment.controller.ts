@@ -46,7 +46,21 @@ export const verifyPayment = async (req: Request, res: Response) => {
         screenshotUrl: `/uploads/${file.filename}`,
         status: 'PENDING',
       },
+      include: {
+        user: { select: { regId: true, mobile: true } }
+      }
     });
+
+    // Notify Admin
+    const { sendAdminNotification } = await import('../services/mail.service');
+    sendAdminNotification(
+      'New Payment Submitted',
+      `<p>A new payment proof has been submitted for verification.</p>
+       <p><b>Member ID:</b> ${pendingPayment.user.regId}</p>
+       <p><b>Plan:</b> ${planType}</p>
+       <p><b>Amount:</b> ₹${amount}</p>
+       <p><b>TXN ID:</b> ${transactionId}</p>`
+    ).catch(() => {});
 
     res.status(201).json({
       message: 'Payment submitted successfully. Please wait for admin verification.',

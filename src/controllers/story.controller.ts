@@ -46,6 +46,14 @@ export const submitStory = async (req: Request, res: Response) => {
       }
     });
 
+    // Notify Admin
+    const { sendAdminNotification } = await import('../services/mail.service');
+    sendAdminNotification(
+      'New Success Story Submitted',
+      `<p>A new success story has been submitted by a user and is awaiting review.</p>
+       <p><b>Couple:</b> ${validatedData.groomName} & ${validatedData.brideName}</p>`
+    ).catch(() => {});
+
     res.status(201).json({
       message: 'Your success story has been submitted for review! It will appear publicly once approved by our team.',
       storyId: story.id

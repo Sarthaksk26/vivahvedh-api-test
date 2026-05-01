@@ -70,6 +70,11 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(UPLOADS_PATH));
 
+app.use('/api/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(UPLOADS_PATH));
+
 // 6. API Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/user', userRoutes);
