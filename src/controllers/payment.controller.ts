@@ -94,27 +94,33 @@ export const updatePaymentStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Payment record not found.' });
     }
 
-    if (status === 'APPROVED') {
-      // Calculate expiration date
-      const durationMonths = payment.planType === 'GOLD' ? 12 : payment.planType === 'SILVER' ? 6 : 0;
-      const expiresAt = new Date();
-      expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
-
-      // Update User Plan
-      await prisma.user.update({
-        where: { id: payment.userId },
-        data: {
-          planType: payment.planType,
-          paymentDone: true,
-          planExpiresAt: expiresAt,
-          lastPaidOn: new Date(),
-        },
-      });
+    if (payment.status !== 'PENDING') {
+      return res.status(409).json({ error: `Payment is already ${payment.status.toLowerCase()}.` });
     }
 
-    await prisma.pendingPayment.update({
-      where: { id },
-      data: { status },
+    await prisma.$transaction(async (tx) => {
+      if (status === 'APPROVED') {
+        // Calculate expiration date
+        const durationMonths = payment.planType === 'GOLD' ? 12 : payment.planType === 'SILVER' ? 6 : 0;
+        const expiresAt = new Date();
+        expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
+
+        // Update user plan atomically with payment status update.
+        await tx.user.update({
+          where: { id: payment.userId },
+          data: {
+            planType: payment.planType,
+            paymentDone: true,
+            planExpiresAt: expiresAt,
+            lastPaidOn: new Date(),
+          },
+        });
+      }
+
+      await tx.pendingPayment.update({
+        where: { id },
+        data: { status },
+      });
     });
 
     // Notify User

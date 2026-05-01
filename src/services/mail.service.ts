@@ -29,8 +29,20 @@ export const sendMail = async (to: string, subject: string, htmlContent: string)
       html: htmlContent,
     });
     console.log(`✉️ Email securely sent: [${info.messageId}] to ${to}`);
-  } catch (error) {
-    console.error('❌ Failed to route email:', error);
+  } catch (error: any) {
+    console.error('❌ Email send failed:', {
+      to,
+      subject,
+      error: error.message,
+      code: error.code,
+      hint: error.code === 'ECONNREFUSED' 
+        ? 'Check SMTP_HOST and SMTP_PORT settings'
+        : error.code === 'EAUTH'
+        ? 'Check SMTP_USER and SMTP_PASS — authentication failed'
+        : 'Unknown error'
+    });
+    // Re-throw so calling code can handle if needed
+    throw error;
   }
 };
 
@@ -228,4 +240,34 @@ export const sendBirthdayWishEmail = async (to: string, name: string) => {
       </div>
     </div>`;
   await sendMail(to, `🎂 Happy Birthday ${name}! | Vivahvedh`, html);
+};
+
+export const sendPasswordChangedEmail = async (to: string, regId: string) => {
+  if (!to) return; // No email on file, skip silently
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 30px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+      <div style="border-top: 4px solid #e11d48; padding-top: 20px; margin-bottom: 20px;">
+        <h2 style="color: #e11d48; margin: 0;">Password Changed Successfully 🔐</h2>
+      </div>
+      <p style="font-size: 16px;">Dear Member <strong>(${regId})</strong>,</p>
+      <p>Your Vivahvedh account password was successfully changed.</p>
+      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; border-radius: 4px; margin: 20px 0;">
+        <p style="margin: 0; font-weight: bold; color: #856404;">
+          ⚠️ If you did NOT make this change, please contact us immediately at 
+          <a href="mailto:${process.env.SMTP_USER}" style="color: #856404;">${process.env.SMTP_USER}</a>
+        </p>
+      </div>
+      <p style="color: #666; font-size: 14px;">
+        Time of change: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+      </p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #999;">
+        Best regards,<br/>Vivahvedh Matrimony Team<br/>
+        © ${new Date().getFullYear()} Vivahvedh Matrimonial
+      </p>
+    </div>
+  `;
+  
+  await sendMail(to, '🔐 Password Changed | Vivahvedh Account Security', html);
 };

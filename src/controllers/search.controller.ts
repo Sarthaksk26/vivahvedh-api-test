@@ -4,7 +4,7 @@ import { maskPrivateDetails } from '../utils/sanitize';
 
 export const executeSearch = async (req: Request, res: Response) => {
   try {
-    const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, page = '1', limit = '20' } = req.query;
+    const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, cursor, limit = '20' } = req.query;
 
     let profileFilters: any = {};
 
@@ -91,13 +91,10 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     const baseWhere = { AND: conditions };
 
-    const pageNumber = parseInt(String(page)) || 1;
     const pageSize = parseInt(String(limit)) || 20;
-    const skip = (pageNumber - 1) * pageSize;
 
-    // Get total count for pagination
+    // Get total count for metadata
     const totalResults = await prisma.user.count({ where: baseWhere });
-    const totalPages = Math.ceil(totalResults / pageSize);
 
     // Gold users appear first (priority listing)
     const matches = await prisma.user.findMany({
@@ -113,10 +110,12 @@ export const executeSearch = async (req: Request, res: Response) => {
       },
       orderBy: [
         { planType: 'desc' }, // GOLD > SILVER > FREE
-        { createdAt: 'desc' }
+        { createdAt: 'desc' },
+        { id: 'asc' } // Deterministic tie-breaker for cursor
       ],
-      skip,
-      take: pageSize
+      take: pageSize,
+      cursor: cursor ? { id: String(cursor) } : undefined,
+      skip: cursor ? 1 : 0,
     });
 
     // Strip out sensitive base user fields before sending
@@ -132,11 +131,13 @@ export const executeSearch = async (req: Request, res: Response) => {
       return safeQuery;
     });
 
+    const lastMatch = safeMatches[safeMatches.length - 1];
+    const nextCursor = safeMatches.length === pageSize ? lastMatch?.id : null;
+
     res.status(200).json({ 
       results: safeMatches,
       pagination: {
-        currentPage: pageNumber,
-        totalPages,
+        nextCursor,
         totalResults,
         pageSize
       }
@@ -159,12 +160,12 @@ export const getPublicProfile = async (req: Request, res: Response) => {
       id: id as string,
       role: 'USER'
     };
-    
+
     if (!isAdmin) {
       whereClause.accountStatus = 'ACTIVE';
     }
 
-    const userProfile = await prisma.user.findUnique({
+    const userProfile = await prisma.user.findFirst({
       where: whereClause,
       include: {
         profile: true,

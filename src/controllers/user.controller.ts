@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { maskPrivateDetails } from '../utils/sanitize';
 import { AppError } from '../utils/AppError';
 import { asyncHandler } from '../utils/asyncHandler';
+import { sendPasswordChangedEmail } from '../services/mail.service';
+import { StorageService } from '../services/storage.service';
 
 // ═══════════════════════════════════════════════════════════════════
 // Zod schemas — whitelist of ALLOWED fields per sub-model.
@@ -42,9 +44,9 @@ const familySchema = z.object({
   marriedBrothers:   z.number().int().min(0).max(20).optional(),
   sisters:           z.number().int().min(0).max(20).optional(),
   marriedSisters:    z.number().int().min(0).max(20).optional(),
-  relativesSirnames: z.string().max(500).optional().nullable(),
-  familyBackground:  z.string().max(1000).optional().nullable(),
-  familyWealth:      z.string().max(200).optional().nullable(),
+  relativesSirnames: z.string().max(1000).optional().nullable(),
+  familyBackground:  z.string().max(2000).optional().nullable(),
+  familyWealth:      z.string().max(1000).optional().nullable(),
   agricultureLand:   z.string().max(200).optional().nullable(),
   plot:              z.string().max(200).optional().nullable(),
   flat:              z.string().max(200).optional().nullable(),
@@ -159,7 +161,8 @@ export const uploadPhoto = asyncHandler(async (req: Request, res: Response) => {
   if (!req.file) throw new AppError('No image file provided.', 400);
 
   const userId = req.user.id;
-  const photoUrl = `/uploads/${req.file.filename}`;
+  // req.file.path already contains the full URL or relative path from processImage middleware
+  const photoUrl = req.file.path;
 
   const existingCount = await prisma.image.count({ where: { userId } });
 
@@ -183,16 +186,7 @@ export const deletePhoto = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError('Image not found or access denied.', 404);
   }
 
-  // Safe deletion — uses path.basename to block traversal
-  const filePath = safeFilePath(image.url);
-  if (filePath) {
-    try {
-      await fs.access(filePath);
-      await fs.unlink(filePath);
-    } catch {
-      // File already gone from disk — not critical
-    }
-  }
+  await StorageService.deleteImage(image.url);
 
   await prisma.image.delete({ where: { id: imageId } });
 
@@ -211,6 +205,36 @@ export const deletePhoto = asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.status(200).json({ success: true, message: 'Photo deleted.' });
+});
+
+export const setProfilePhoto = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  const imageId = req.params.imageId as string;
+
+  // Verify the image belongs to this user
+  const image = await prisma.image.findUnique({ where: { id: imageId } });
+  if (!image || image.userId !== userId) {
+    throw new AppError('Image not found or access denied.', 404);
+  }
+
+  if (image.isPrimary) {
+    res.status(200).json({ success: true, message: 'This photo is already your profile photo.' });
+    return;
+  }
+
+  // Use a transaction: unset current primary, set new primary
+  await prisma.$transaction([
+    prisma.image.updateMany({
+      where: { userId, isPrimary: true },
+      data: { isPrimary: false }
+    }),
+    prisma.image.update({
+      where: { id: imageId },
+      data: { isPrimary: true }
+    })
+  ]);
+
+  res.status(200).json({ success: true, message: 'Profile photo updated successfully.' });
 });
 
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
@@ -278,7 +302,9 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required.'),
-  newPassword:     z.string().min(6, 'New password must be at least 6 characters.'),
+  newPassword: z.string()
+    .min(6, 'New password must be at least 6 characters.')
+    .max(100, 'Password too long.'),
 });
 
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
@@ -291,11 +317,22 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   const isMatch = await bcrypt.compare(currentPassword, user.password);
   if (!isMatch) throw new AppError('Current password is incorrect.', 401);
 
+  // Prevent using the same password
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    throw new AppError('New password must be different from your current password.', 400);
+  }
+
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({
     where: { id: userId },
     data: { password: hashedPassword, requiresPasswordChange: false },
   });
+
+  // Fire and forget — notify user about password change
+  sendPasswordChangedEmail(user.email || '', user.regId).catch(e => 
+    console.error('[Mail] Password change notification failed:', e)
+  );
 
   res.status(200).json({ success: true, message: 'Password changed successfully.' });
 });

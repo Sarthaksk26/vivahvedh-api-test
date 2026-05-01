@@ -4,7 +4,10 @@ const prisma = new PrismaClient();
 
 async function main() {
   const adminRegId = 'VV-ADMIN1';
-  const newPassword = 'password123';
+  const newPassword = process.env.ADMIN_RESET_PASSWORD;
+  if (!newPassword) {
+    throw new Error('ADMIN_RESET_PASSWORD is required.');
+  }
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
   const updatedAdmin = await prisma.user.update({
