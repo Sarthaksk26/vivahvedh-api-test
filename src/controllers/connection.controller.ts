@@ -48,6 +48,16 @@ export const sendInterest = async (req: Request, res: Response) => {
       return;
     }
 
+    const receiverData = await prisma.user.findUnique({
+      where: { id: receiverId },
+      include: { profile: true }
+    });
+
+    if (!receiverData || receiverData.role !== 'USER' || receiverData.accountStatus !== 'ACTIVE') {
+      res.status(404).json({ error: 'Target user is unavailable.' });
+      return;
+    }
+
     const newRequest = await prisma.request.create({
       data: {
         senderId,
@@ -57,10 +67,6 @@ export const sendInterest = async (req: Request, res: Response) => {
     });
 
     // Trigger Email to Receiver safely
-    const receiverData = await prisma.user.findUnique({
-      where: { id: receiverId },
-      include: { profile: true }
-    });
     const senderData = await prisma.user.findUnique({
       where: { id: senderId },
       include: { profile: true }
@@ -91,6 +97,11 @@ export const acceptInterest = async (req: Request, res: Response) => {
     const request = await prisma.request.findUnique({ where: { id: requestId } });
     if (!request || request.receiverId !== receiverId) {
       res.status(403).json({ error: "Invalid request." });
+      return;
+    }
+
+    if (request.status !== 'PENDING') {
+      res.status(409).json({ error: `Request is already ${request.status.toLowerCase()}.` });
       return;
     }
 
@@ -130,7 +141,7 @@ export const rejectInterest = async (req: Request, res: Response) => {
     const { requestId } = req.body;
 
     const request = await prisma.request.updateMany({
-      where: { id: requestId, receiverId },
+      where: { id: requestId, receiverId, status: 'PENDING' },
       data: { status: 'REJECTED' }
     });
 

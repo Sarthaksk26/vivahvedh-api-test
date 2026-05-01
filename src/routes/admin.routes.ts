@@ -75,4 +75,19 @@ router.get('/connections', requireAuth, requireAdmin, getConnectionLogs);
 // Profit Tracker
 router.get('/profit', requireAuth, requireAdmin, getProfitStats);
 
+// Email Test
+router.post('/test-email', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { sendMail } = await import('../services/mail.service');
+    await sendMail(
+      req.body.email || process.env.SMTP_USER || '',
+      '✅ Vivahvedh Email Test',
+      '<h2>Email system is working correctly!</h2><p>This is a test email from Vivahvedh admin panel.</p>'
+    );
+    res.json({ message: 'Test email sent. Check your inbox.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Email test failed', details: err.message });
+  }
+});
+
 export default router;

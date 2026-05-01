@@ -7,7 +7,11 @@ const prisma = new PrismaClient();
 async function seed() {
   console.log('🌱 Seeding test accounts...\n');
 
-  const password = await bcrypt.hash('Test@123', 10);
+  const seedPassword = process.env.SEED_TEST_PASSWORD;
+  if (!seedPassword) {
+    throw new Error('SEED_TEST_PASSWORD is required.');
+  }
+  const password = await bcrypt.hash(seedPassword, 10);
 
   // ==========================================
   // 1. ADMIN ACCOUNT
@@ -256,10 +260,10 @@ async function seed() {
   console.log('├────────────┬───────────────┬───────────┬──────────┬─────────────────┤');
   console.log('│ Role       │ Username      │ Password  │ Plan     │ Status          │');
   console.log('├────────────┼───────────────┼───────────┼──────────┼─────────────────┤');
-  console.log('│ ADMIN      │ 9999000001    │ Test@123  │ Gold     │ Active          │');
-  console.log('│ USER       │ 9999000002    │ Test@123  │ Gold     │ Active          │');
-  console.log('│ USER       │ 9999000003    │ Test@123  │ Silver   │ Active          │');
-  console.log('│ USER       │ 9999000004    │ Test@123  │ Free     │ Pending Approval│');
+  console.log('│ ADMIN      │ 9999000001    │ (from env) │ Gold     │ Active          │');
+  console.log('│ USER       │ 9999000002    │ (from env) │ Gold     │ Active          │');
+  console.log('│ USER       │ 9999000003    │ (from env) │ Silver   │ Active          │');
+  console.log('│ USER       │ 9999000004    │ (from env) │ Free     │ Pending Approval│');
   console.log('└────────────┴───────────────┴───────────┴──────────┴─────────────────┘');
 
   await prisma.$disconnect();

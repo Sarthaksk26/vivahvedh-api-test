@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import { Request, Response, NextFunction } from 'express';
+import { StorageService } from '../services/storage.service';
 
 // ── Directory setup ─────────────────────────────────────────────────
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
@@ -38,8 +39,9 @@ export const upload = multer({
 });
 
 /**
- * Middleware: process an in-memory image buffer through sharp → WebP,
- * then persist to disk. Updates req.file metadata for downstream controllers.
+ * Middleware: process an in-memory image buffer,
+ * then persist to disk OR cloud storage via StorageService.
+ * Updates req.file metadata for downstream controllers.
  */
 export const processImage = async (req: Request, _res: Response, next: NextFunction) => {
   if (!req.file) return next();
@@ -48,15 +50,13 @@ export const processImage = async (req: Request, _res: Response, next: NextFunct
     const userId = (req as any).user?.id || 'anon';
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const filename = `img-${userId}-${uniqueSuffix}.webp`;
-    const outputPath = path.join(UPLOAD_DIR, filename);
 
-    await sharp(req.file.buffer)
-      .resize({ width: 1200, withoutEnlargement: true })
-      .webp({ quality: 80 })
-      .toFile(outputPath);
+    const url = await StorageService.uploadImage(req.file.buffer, filename);
 
+    // If it's a relative URL, prepend host or keep as is (controller will handle)
+    // We update req.file.path to be the URL so controllers can store it
+    req.file.path = url;
     req.file.filename = filename;
-    req.file.path = outputPath;
     req.file.mimetype = 'image/webp';
 
     next();

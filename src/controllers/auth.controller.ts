@@ -92,8 +92,10 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     }
   });
 
+  // Fire and forget with visible error logging
   if (emailLower) {
-    sendWelcomeEmail(emailLower, validatedData.firstName, newRegId);
+    sendWelcomeEmail(emailLower, validatedData.firstName, newRegId)
+      .catch(err => console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message));
   }
 
   res.status(201).json({

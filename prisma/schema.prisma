@@ -40,6 +40,7 @@ model User {
   profile              UserProfile?
 
   @@index([planType, createdAt(sort: Desc)])
+  @@index([role, accountStatus])
 }
 
 model UserProfile {
@@ -58,7 +59,7 @@ model UserProfile {
   subCasteId    Int?
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([gender, maritalStatus])
+  @@index([gender, maritalStatus, casteId])
   @@index([casteId])
 }
 

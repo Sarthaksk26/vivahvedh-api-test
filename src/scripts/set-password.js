@@ -4,7 +4,11 @@ const prisma = new PrismaClient();
 
 async function main() {
   try {
-    const hashedPassword = await bcrypt.hash('Test@123', 10);
+    const password = process.env.SET_PASSWORD_VALUE;
+    if (!password) {
+      throw new Error('SET_PASSWORD_VALUE is required.');
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.update({
       where: { mobile: '9111111111' },
       data: {

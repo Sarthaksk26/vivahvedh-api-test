@@ -1,10 +1,23 @@
 import { Request, Response } from 'express';
 import prisma from '../config/db';
 import { sendEnquiryNotificationEmail, sendMail } from '../services/mail.service';
+import { z } from 'zod';
+
+const enquirySchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().max(254),
+  phone: z.string().trim().min(8).max(20).optional().or(z.literal('')),
+  message: z.string().trim().min(10).max(2000),
+});
 
 export const submitEnquiry = async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, message } = req.body;
+    const parsed = enquirySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues.map((issue) => issue.message) });
+    }
+
+    const { name, email, phone, message } = parsed.data;
 
     const names = name ? name.split(' ') : ['Guest', ''];
     const firstName = names[0];
