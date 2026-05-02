@@ -57,20 +57,21 @@ export const setAuthCookies = (
   refreshToken: string
 ): void => {
   // Access token cookie — short-lived (15 minutes)
+  const production = isProduction();
   res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: isProduction() ? 'none' : 'lax',
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    secure: true, // Always true for Render/HTTPS
+    sameSite: 'none', // Required for cross-site on Render
+    maxAge: 15 * 60 * 1000,
     path: '/',
   });
 
   // Refresh token cookie — long-lived (7 days)
   res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: isProduction() ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    secure: true,
+    sameSite: 'none',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/',
   });
 };
