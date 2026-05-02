@@ -2,7 +2,7 @@
  * Safely removes sensitive fields from an object or array of objects.
  * Standard PII fields to exclude: password, role, mobile, email (masking)
  */
-export const excludeFields = <T, K extends keyof T>(
+export const excludeFields = <T extends object, K extends keyof T>(
   obj: T | T[],
   keys: K[]
 ): any => {
@@ -11,23 +11,32 @@ export const excludeFields = <T, K extends keyof T>(
   }
 
   if (obj && typeof obj === 'object') {
-    const newObj = { ...obj };
+    const newObj = { ...obj } as any;
     keys.forEach((key) => {
-      delete (newObj as any)[key];
+      delete newObj[key];
     });
-    return newObj;
+    return newObj as Omit<T, K>;
   }
 
   return obj;
 };
 
-export const sanitizeUser = (user: any) => {
-  return excludeFields(user, ['password', 'role'] as any);
+export interface SanitizableUser {
+  id: string;
+  password?: string;
+  role?: string;
+  mobile?: string;
+  email?: string | null;
+  [key: string]: any;
+}
+
+export const sanitizeUser = <T extends SanitizableUser>(user: T): Omit<T, 'password' | 'role'> => {
+  return excludeFields(user, ['password', 'role']);
 };
 
-export const maskPrivateDetails = (user: any, sameUser: boolean = false) => {
+export const maskPrivateDetails = <T extends SanitizableUser>(user: T, sameUser: boolean = false): any => {
   if (!user) return user;
-  const safe = sanitizeUser(user);
+  const safe = sanitizeUser(user) as any;
   
   if (!sameUser) {
     safe.mobile = '';

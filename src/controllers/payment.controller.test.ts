@@ -42,7 +42,7 @@ describe('updatePaymentStatus', () => {
     const req: any = { params: { id: 'pay-1' }, body: { status: 'REJECTED' } };
     const res = mockRes();
 
-    await updatePaymentStatus(req, res as any);
+    await updatePaymentStatus(req, res as any, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ describe('updatePaymentStatus', () => {
     const req: any = { params: { id: 'pay-2' }, body: { status: 'APPROVED' } };
     const res = mockRes();
 
-    await updatePaymentStatus(req, res as any);
+    await updatePaymentStatus(req, res as any, vi.fn());
 
     expect(prismaMock.$transaction).toHaveBeenCalledOnce();
     expect(res.json).toHaveBeenCalledWith({ message: 'Payment approved successfully.' });

@@ -60,7 +60,8 @@ model UserProfile {
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([gender, maritalStatus, casteId])
-  @@index([casteId])
+  @@index([religionId, casteId, subCasteId])
+  @@index([birthDateTime])
 }
 
 model UserPhysical {
@@ -145,6 +146,8 @@ model UserAddress {
   districtId  Int?
   stateId     Int?
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([state, district, city])
 }
 
 model Image {
@@ -154,6 +157,8 @@ model Image {
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, isPrimary])
 }
 
 model Request {
@@ -167,6 +172,8 @@ model Request {
   sender     User          @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
+  @@index([status])
+  @@index([receiverId, status])
 }
 
 model Shortlist {
@@ -178,6 +185,7 @@ model Shortlist {
   user         User     @relation("ShortlistedUsers", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, targetUserId])
+  @@index([userId])
 }
 
 model ProfileView {
@@ -189,6 +197,7 @@ model ProfileView {
   viewer   User     @relation("ViewerProfile", fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@unique([viewerId, viewedId])
+  @@index([viewedId, viewedAt])
 }
 
 model Enquiry {
@@ -201,6 +210,8 @@ model Enquiry {
   message    String
   isResolved Boolean  @default(false)
   createdAt  DateTime @default(now())
+  
+  @@index([isResolved, createdAt])
 }
 
 model PendingPayment {
@@ -216,6 +227,7 @@ model PendingPayment {
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, transactionId])
+  @@index([status, createdAt])
 }
 
 model Religion {
@@ -277,6 +289,8 @@ model SuccessStory {
   submittedBy String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  
+  @@index([status, createdAt])
 }
 
 enum StoryStatus {
