@@ -22,18 +22,6 @@ declare global {
  *  2. Authorization header (fallback — backward compat during migration)
  */
 const extractToken = (req: Request): string | null => {
-  // Debug log to see if cookies are arriving
-  if (req.cookies) {
-    const keys = Object.keys(req.cookies);
-    if (keys.length > 0) {
-      console.log(`[Auth] Cookies received: ${keys.join(', ')}`);
-    } else {
-      console.log('[Auth] Cookies object exists but is empty');
-    }
-  } else {
-    console.log('[Auth] No cookies found in request (cookie-parser missing or browser blocked)');
-  }
-
   // 1. Cookie-based (preferred)
   const cookieToken = req.cookies?.[ACCESS_TOKEN_COOKIE] as string | undefined;
   if (cookieToken) return cookieToken;
