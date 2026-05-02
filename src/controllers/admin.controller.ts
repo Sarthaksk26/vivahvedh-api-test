@@ -11,7 +11,7 @@ import { generateUniqueRegId } from '../utils/id.util';
 export const getPendingApprovals = asyncHandler(async (req: Request, res: Response) => {
   const pendingUsers = await prisma.user.findMany({
     where: { accountStatus: 'INACTIVE' },
-    include: { profile: true, images: true },
+    include: { profile: true, images: { orderBy: { isPrimary: 'desc' } } },
     orderBy: { createdAt: 'asc' }
   });
   res.status(200).json(pendingUsers);
@@ -61,7 +61,7 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
 
   const allUsers = await prisma.user.findMany({
     where: baseWhere,
-    include: { profile: true },
+    include: { profile: true, images: { orderBy: { isPrimary: 'desc' } } },
     orderBy: { createdAt: 'desc' }
   });
   res.status(200).json(allUsers);

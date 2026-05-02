@@ -41,7 +41,7 @@ export const verifyPayment = asyncHandler(async (req: Request, res: Response) =>
       planType,
       amount,
       transactionId,
-      screenshotUrl: `/uploads/${file.filename}`,
+      screenshotUrl: file.path,
       status: 'PENDING',
     },
     include: {

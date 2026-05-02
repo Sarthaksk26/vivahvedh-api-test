@@ -62,7 +62,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       return daysUntil <= 7;
     }).length;
 
-    const totalUnread = pendingApprovals + pendingPayments + unresolvedEnquiries + pendingStories;
+    const totalUnread = pendingApprovals + pendingPayments + unresolvedEnquiries + pendingStories + recentConnections;
 
     res.json({
       totalUnread,
