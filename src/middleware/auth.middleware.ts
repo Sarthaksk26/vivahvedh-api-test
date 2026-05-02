@@ -63,7 +63,8 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     };
 
     next();
-  } catch {
+  } catch (err: any) {
+    console.error(`[Auth] Token validation failed: ${err.message}`);
     res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
     return;
   }
