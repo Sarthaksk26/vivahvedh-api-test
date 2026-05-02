@@ -72,7 +72,7 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
         pendingPayments: { count: pendingPayments, label: 'Payments to verify', tab: 'payments', urgent: pendingPayments > 0 },
         unresolvedEnquiries: { count: unresolvedEnquiries, label: 'Unresolved enquiries', tab: 'enquiries', urgent: unresolvedEnquiries > 0 },
         pendingStories: { count: pendingStories, label: 'Stories awaiting review', tab: 'stories', urgent: pendingStories > 0 },
-        recentConnections: { count: recentConnections, label: 'Connections this week', tab: 'connections' },
+        recentConnections: { count: recentConnections, label: 'Connections this week', tab: 'connections', urgent: recentConnections > 0 },
         upcomingBirthdays: { count: birthdayCount, label: 'Birthdays this week', tab: 'birthdays', urgent: birthdayCount > 0 },
       }
     });
