@@ -57,11 +57,11 @@ export const setAuthCookies = (
   refreshToken: string
 ): void => {
   // Access token cookie — short-lived (15 minutes)
-  const production = isProduction();
   res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
     httpOnly: true,
-    secure: true, // Always true for Render/HTTPS
-    sameSite: 'none', // Required for cross-site on Render
+    secure: true,
+    sameSite: 'none',
+    partitioned: true, // Enable CHIPS for cross-site support
     maxAge: 15 * 60 * 1000,
     path: '/',
   });
@@ -71,6 +71,7 @@ export const setAuthCookies = (
     httpOnly: true,
     secure: true,
     sameSite: 'none',
+    partitioned: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: '/',
   });
