@@ -1,15 +1,20 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import prisma from '../config/db';
 import { maskPrivateDetails } from '../utils/sanitize';
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /api/search — Cursor-Based Matchmaking Search
+// ═══════════════════════════════════════════════════════════════════
 
 export const executeSearch = async (req: Request, res: Response) => {
   try {
     const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, cursor, limit = '20' } = req.query;
 
-    let profileFilters: any = {};
+    const profileFilters: Prisma.UserProfileWhereInput = {};
 
-    if (gender) profileFilters.gender = String(gender).toUpperCase();
-    if (maritalStatus) profileFilters.maritalStatus = String(maritalStatus).toUpperCase();
+    if (gender) profileFilters.gender = String(gender).toUpperCase() as Prisma.EnumGenderFilter['equals'];
+    if (maritalStatus) profileFilters.maritalStatus = String(maritalStatus).toUpperCase() as Prisma.EnumMaritalStatusFilter['equals'];
     if (casteId) profileFilters.casteId = parseInt(String(casteId));
 
     if (ageMin || ageMax) {
@@ -17,16 +22,16 @@ export const executeSearch = async (req: Request, res: Response) => {
       const today = new Date();
       if (ageMax) {
          const minDate = new Date(today.getFullYear() - parseInt(String(ageMax)) - 1, today.getMonth(), today.getDate());
-         profileFilters.birthDateTime.gte = minDate;
+         (profileFilters.birthDateTime as Prisma.DateTimeNullableFilter).gte = minDate;
       }
       if (ageMin) {
          const maxDate = new Date(today.getFullYear() - parseInt(String(ageMin)), today.getMonth(), today.getDate());
-         profileFilters.birthDateTime.lte = maxDate;
+         (profileFilters.birthDateTime as Prisma.DateTimeNullableFilter).lte = maxDate;
       }
     }
 
     // Build conditions array for consistent AND logic
-    const conditions: any[] = [
+    const conditions: Prisma.UserWhereInput[] = [
       { accountStatus: 'ACTIVE' },
       { role: 'USER' }
     ];
@@ -47,7 +52,7 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // Physical Filters
     if (height || diet) {
-      const physicalFilter: any = {};
+      const physicalFilter: Prisma.UserPhysicalWhereInput = {};
       if (height) physicalFilter.height = { contains: String(height), mode: 'insensitive' };
       if (diet) physicalFilter.diet = { contains: String(diet), mode: 'insensitive' };
       conditions.push({ physical: { is: physicalFilter } });
@@ -55,7 +60,7 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // Education Filters
     if (trade || occupation) {
-      const educationFilter: any = {};
+      const educationFilter: Prisma.UserEducationWhereInput = {};
       if (trade) educationFilter.trade = { contains: String(trade), mode: 'insensitive' };
       if (occupation) educationFilter.jobBusiness = { contains: String(occupation), mode: 'insensitive' };
       conditions.push({ education: { is: educationFilter } });
@@ -89,14 +94,13 @@ export const executeSearch = async (req: Request, res: Response) => {
       });
     }
 
-    const baseWhere = { AND: conditions };
+    const baseWhere: Prisma.UserWhereInput = { AND: conditions };
 
     const pageSize = parseInt(String(limit)) || 20;
 
-    // Get total count for metadata
-    const totalResults = await prisma.user.count({ where: baseWhere });
-
-    // Gold users appear first (priority listing)
+    // ── Cursor + Overfetch Strategy ──────────────────────────────
+    // Fetch limit+1 to detect hasMore without COUNT(*) — eliminates
+    // the full-table sequential scan bottleneck entirely.
     const matches = await prisma.user.findMany({
       where: baseWhere,
       include: {
@@ -113,15 +117,18 @@ export const executeSearch = async (req: Request, res: Response) => {
         { createdAt: 'desc' },
         { id: 'asc' } // Deterministic tie-breaker for cursor
       ],
-      take: pageSize,
+      take: pageSize + 1, // Overfetch by 1 to detect hasMore
       cursor: cursor ? { id: String(cursor) } : undefined,
       skip: cursor ? 1 : 0,
     });
 
-    // Strip out sensitive base user fields before sending
-    const safeMatches = matches.map(user => {
+    // Determine hasMore from overfetch
+    const hasMore = matches.length > pageSize;
+    const pageResults = hasMore ? matches.slice(0, pageSize) : matches;
+
+    const safeMatches = pageResults.map(user => {
       const sameUser = user.id === req.user?.id;
-      const safeQuery = maskPrivateDetails(user, sameUser);
+      const safeQuery = maskPrivateDetails(user as any, sameUser) as Record<string, any>;
       
       // Guest users only see surname
       if (!req.user && safeQuery.profile) {
@@ -132,22 +139,30 @@ export const executeSearch = async (req: Request, res: Response) => {
     });
 
     const lastMatch = safeMatches[safeMatches.length - 1];
-    const nextCursor = safeMatches.length === pageSize ? lastMatch?.id : null;
+    const nextCursor = hasMore ? lastMatch?.id ?? null : null;
 
-    res.status(200).json({ 
+    const pagination = {
+      nextCursor,
+      hasMore,
+      pageSize,
+    };
+
+    const responseBody = {
       results: safeMatches,
-      pagination: {
-        nextCursor,
-        totalResults,
-        pageSize
-      }
-    });
+      pagination,
+    };
+
+    res.status(200).json(responseBody);
 
   } catch (error) {
     console.error("Matchmaking Error:", error);
     res.status(500).json({ error: 'Failed to execute query.' });
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /api/search/public/:id — Public Profile View
+// ═══════════════════════════════════════════════════════════════════
 
 export const getPublicProfile = async (req: Request, res: Response) => {
   try {
@@ -156,7 +171,7 @@ export const getPublicProfile = async (req: Request, res: Response) => {
 
     const isAdmin = req.user?.role === 'ADMIN';
 
-    const whereClause: any = {
+    const whereClause: Prisma.UserWhereInput = {
       id: id as string,
       role: 'USER'
     };

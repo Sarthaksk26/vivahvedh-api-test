@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import prisma from '../config/db';
 import fs from 'fs/promises';
 import path from 'path';
@@ -248,17 +249,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   const data = updateProfileBodySchema.parse(req.body);
 
   // Build the Prisma nested-write dynamically from validated data only
-  interface PrismaUpdateData {
-    profile?: { create: any } | { update: any };
-    family?: { create: any } | { update: any };
-    education?: { create: any } | { update: any };
-    physical?: { create: any } | { update: any };
-    astrology?: { create: any } | { update: any };
-    preferences?: { create: any } | { update: any };
-    addresses?: { deleteMany: {}; create: any[] };
-  }
-
-  const prismaData: PrismaUpdateData = {};
+  const prismaData: Record<string, any> = {};
 
   const subModels = ['profile', 'family', 'education', 'physical', 'astrology', 'preferences'] as const;
   type SubModelKey = typeof subModels[number];
@@ -281,7 +272,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
     const section = data[key];
     if (section && Object.keys(section).length > 0) {
       const exists = existingUser ? existingUser[key] : null;
-      (prismaData as any)[key] = exists 
+      prismaData[key] = exists 
         ? { update: section }
         : { create: section };
     }
@@ -296,7 +287,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: prismaData,
+    data: prismaData as Prisma.UserUpdateInput,
     include: {
       profile: true,
       family: true,
