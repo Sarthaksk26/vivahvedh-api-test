@@ -24,16 +24,6 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '')
 // 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
 app.set('trust proxy', 1);
 
-// Debug: Log raw headers to see if cookies exist before parsing
-app.use((req, res, next) => {
-  if (req.headers.cookie) {
-    console.log(`[RawAuth] Cookie Header: ${req.headers.cookie.split(';').map(c => c.split('=')[0].trim()).join(', ')}`);
-  } else {
-    console.log('[RawAuth] No Cookie header found in raw request');
-  }
-  next();
-});
-
 // 2. Global Security & CORS (MUST be before any routes)
 app.use(cors({
   origin: (origin, callback) => {
