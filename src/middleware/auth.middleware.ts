@@ -2,10 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
 // ── Global type augmentation ────────────────────────────────────────
+interface AuthUser {
+  id: string;
+  role: 'USER' | 'ADMIN';
+  [key: string]: any; // Allow for extra properties if needed, but enforce id/role
+}
+
 declare global {
   namespace Express {
     interface Request {
-      user?: any;
+      user: AuthUser;
     }
   }
 }
@@ -23,17 +29,30 @@ const verifyToken = (token: string) => {
 
 // ── Core middleware ─────────────────────────────────────────────────
 
-/** Requires a valid JWT. Rejects with 401 if missing/invalid. */
-export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+/** Requires a valid JWT and checks for suspended/deleted accounts. */
+export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized. No token provided.' });
   }
   try {
-    req.user = verifyToken(token);
+    const decoded: any = verifyToken(token);
+    
+    // Strict DB Check to prevent stale JWT bypass for suspended/deleted users
+    const prisma = (await import('../config/db')).default;
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, role: true, accountStatus: true, planType: true, planExpiresAt: true, requiresPasswordChange: true }
+    });
+
+    if (!user || user.accountStatus === 'SUSPENDED' || user.accountStatus === 'DELETED') {
+      return res.status(401).json({ error: 'Unauthorized. Account is inactive or non-existent.' });
+    }
+
+    req.user = user;
     next();
   } catch {
-    return res.status(401).json({ error: 'Unauthorized. Invalid token.' });
+    return res.status(401).json({ error: 'Unauthorized. Invalid or expired token.' });
   }
 };
 
@@ -102,7 +121,15 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
   if (!req.user) return next();
 
   try {
-    // Check Plan Expiry
+    // Current state is already fetched in requireAuth for security, but we double check status logic here
+    if (req.user.accountStatus === 'SUSPENDED' || req.user.accountStatus === 'DELETED') {
+      return res.status(403).json({ 
+        error: 'Your account has been suspended or deleted. Please contact support.',
+        code: 'ACCOUNT_SUSPENDED'
+      });
+    }
+
+    // Check Plan Expiry and downgrade if necessary
     if (req.user.planType !== 'FREE' && req.user.planExpiresAt) {
       const now = new Date();
       const expiresAt = new Date(req.user.planExpiresAt);
@@ -114,25 +141,10 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
         });
         req.user.planType = 'FREE';
         req.user.planExpiresAt = null;
-        console.log(`[Plan Expiry] User ${req.user.id} downgraded to FREE`);
       }
     }
 
-    const prisma = (await import('../config/db')).default;
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { accountStatus: true }
-    });
-
-    if (!user || user.accountStatus === 'SUSPENDED' || user.accountStatus === 'DELETED') {
-      return res.status(403).json({ 
-        error: 'Your account has been suspended or deleted. Please contact support.',
-        code: 'ACCOUNT_SUSPENDED'
-      });
-    }
-
-    if (user.accountStatus === 'INACTIVE') {
-      // Allow access to own profile/auth routes so they can complete profile or check status
+    if (req.user.accountStatus === 'INACTIVE') {
       const allowed = ['/api/user/profile', '/api/user/update', '/api/user/upload-photo', '/api/user/change-password', '/api/auth/login'];
       const isAllowed = allowed.some(p => req.originalUrl.startsWith(p));
       
@@ -146,8 +158,7 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
 
     next();
   } catch (error) {
-    console.error('[requireActiveAccount Error]', error);
-    res.status(500).json({ error: 'Internal server error during account verification.' });
+    next(error);
   }
 };
 

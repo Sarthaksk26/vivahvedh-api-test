@@ -23,20 +23,15 @@ const profileSchema = z.object({
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']).optional(),
   birthDateTime: z.string().optional().nullable().transform((val) => {
     if (!val || val.trim() === '') return null;
-    try {
-      // Parse at UTC noon to prevent IST timezone shift
-      const dateStr = val.slice(0, 10);
-      if (dateStr.length < 10) return null;
-      return new Date(`${dateStr}T12:00:00Z`);
-    } catch (e) {
-      return null;
-    }
+    const dateStr = val.slice(0, 10);
+    const d = new Date(`${dateStr}T12:00:00Z`);
+    return isNaN(d.getTime()) ? null : d;
   }),
   birthPlace:    z.string().max(200).optional().nullable(),
   aboutMe:       z.string().max(2000).optional().nullable(),
-  religionId:    z.number().int().positive().optional().nullable(),
-  casteId:       z.number().int().positive().optional().nullable(),
-  subCasteId:    z.number().int().positive().optional().nullable(),
+  religionId:    z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
+  casteId:       z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
+  subCasteId:    z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
 }).strict();
 
 const familySchema = z.object({
@@ -46,10 +41,10 @@ const familySchema = z.object({
   motherOccupation:  z.string().max(200).optional().nullable(),
   motherHometown:    z.string().max(200).optional().nullable(),
   maternalUncleName: z.string().max(100).optional().nullable(),
-  brothers:          z.number().int().min(0).max(20).optional(),
-  marriedBrothers:   z.number().int().min(0).max(20).optional(),
-  sisters:           z.number().int().min(0).max(20).optional(),
-  marriedSisters:    z.number().int().min(0).max(20).optional(),
+  brothers:          z.preprocess((val) => val === '' ? 0 : val, z.coerce.number().int().min(0).max(20).optional()),
+  marriedBrothers:   z.preprocess((val) => val === '' ? 0 : val, z.coerce.number().int().min(0).max(20).optional()),
+  sisters:           z.preprocess((val) => val === '' ? 0 : val, z.coerce.number().int().min(0).max(20).optional()),
+  marriedSisters:    z.preprocess((val) => val === '' ? 0 : val, z.coerce.number().int().min(0).max(20).optional()),
   relativesSirnames: z.string().max(1000).optional().nullable(),
   familyBackground:  z.string().max(2000).optional().nullable(),
   familyWealth:      z.string().max(1000).optional().nullable(),
@@ -59,7 +54,7 @@ const familySchema = z.object({
 }).strict();
 
 const educationSchema = z.object({
-  qualificationId:    z.number().int().positive().optional().nullable(),
+  qualificationId:    z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
   trade:              z.string().max(200).optional().nullable(),
   college:            z.string().max(300).optional().nullable(),
   jobBusiness:        z.string().max(300).optional().nullable(),
@@ -70,14 +65,14 @@ const educationSchema = z.object({
 
 const physicalSchema = z.object({
   height:     z.string().max(50).optional().nullable(),
-  weight:     z.number().int().min(20).max(300).optional().nullable(),
+  weight:     z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().min(20).max(300).optional().nullable()),
   bloodGroup: z.string().max(10).optional().nullable(),
   complexion: z.string().max(50).optional().nullable(),
   health:     z.string().max(200).optional().nullable(),
   disease:    z.string().max(200).optional().nullable(),
   diet:       z.string().max(50).optional().nullable(),
-  smoke:      z.boolean().optional().nullable(),
-  drink:      z.boolean().optional().nullable(),
+  smoke:      z.preprocess((val) => val === 'true' ? true : val === 'false' ? false : val === '' ? null : val, z.boolean().optional().nullable()),
+  drink:      z.preprocess((val) => val === 'true' ? true : val === 'false' ? false : val === '' ? null : val, z.boolean().optional().nullable()),
 }).strict();
 
 const astrologySchema = z.object({
@@ -100,6 +95,9 @@ const addressSchema = z.object({
   state:       z.string().max(100).optional().nullable(),
   addressLine: z.string().max(300).optional().nullable(),
   addressType: z.string().default('PERMANENT'),
+  talukaId:    z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
+  districtId:  z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
+  stateId:     z.preprocess((val) => val === '' ? null : val, z.coerce.number().int().positive().optional().nullable()),
 }).strict();
 
 const updateProfileBodySchema = z.object({
@@ -250,9 +248,20 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   const data = updateProfileBodySchema.parse(req.body);
 
   // Build the Prisma nested-write dynamically from validated data only
-  const prismaData: Record<string, any> = {};
+  interface PrismaUpdateData {
+    profile?: { create: any } | { update: any };
+    family?: { create: any } | { update: any };
+    education?: { create: any } | { update: any };
+    physical?: { create: any } | { update: any };
+    astrology?: { create: any } | { update: any };
+    preferences?: { create: any } | { update: any };
+    addresses?: { deleteMany: {}; create: any[] };
+  }
+
+  const prismaData: PrismaUpdateData = {};
 
   const subModels = ['profile', 'family', 'education', 'physical', 'astrology', 'preferences'] as const;
+  type SubModelKey = typeof subModels[number];
 
   // Before the Prisma update call, check which sub-models exist
   const existingUser = await prisma.user.findUnique({
@@ -269,10 +278,10 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 
   // Then for each sub-model, use 'create' if null, 'update' if exists
   for (const key of subModels) {
-    const section = (data as any)[key];
+    const section = data[key];
     if (section && Object.keys(section).length > 0) {
-      const exists = (existingUser as any)?.[key];
-      prismaData[key] = exists 
+      const exists = existingUser ? existingUser[key] : null;
+      (prismaData as any)[key] = exists 
         ? { update: section }
         : { create: section };
     }

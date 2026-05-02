@@ -45,7 +45,7 @@ describe('connection transitions', () => {
 
     const req: any = { user: { id: 'user-2' }, body: { requestId: 'req-1' } };
     const res = mockRes();
-    await acceptInterest(req, res as any);
+    await acceptInterest(req, res as any, vi.fn());
 
     expect(res.status).toHaveBeenCalledWith(409);
     expect(prismaMock.request.update).not.toHaveBeenCalled();
@@ -56,7 +56,7 @@ describe('connection transitions', () => {
     const req: any = { user: { id: 'user-2' }, body: { requestId: 'req-2' } };
     const res = mockRes();
 
-    await rejectInterest(req, res as any);
+    await rejectInterest(req, res as any, vi.fn());
 
     expect(prismaMock.request.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ status: 'PENDING' }) })

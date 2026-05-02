@@ -6,18 +6,19 @@ import { z } from 'zod';
 import { getJwtSecret } from '../config/env';
 import { sendWelcomeEmail } from '../services/mail.service';
 import { asyncHandler } from '../utils/asyncHandler';
+import { generateUniqueRegId } from '../utils/id.util';
 
 const PROFILE_CREATED_BY_OPTIONS = ['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau'] as const;
 
 // Zod Schema for strict validation
 const registerSchema = z.object({
-  mobile: z.string().min(10).max(15),
-  password: z.string().min(6),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  mobile: z.string().min(10).max(15).regex(/^[0-9]+$/, 'Mobile must contain only digits'),
+  password: z.string().min(8).max(100),
+  firstName: z.string().min(1).max(100).trim(),
+  lastName: z.string().min(1).max(100).trim(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
-  email: z.string().email(),
+  email: z.string().email().max(254).toLowerCase(),
   birthDate: z.string().refine((val) => {
     const dob = new Date(`${val.slice(0, 10)}T12:00:00Z`);
     if (isNaN(dob.getTime())) return false;
@@ -25,20 +26,12 @@ const registerSchema = z.object({
     return age >= 18;
   }, { message: 'Date of Birth is required and must be at least 18 years old.' }),
   profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional()
-});
+}).strict();
 
-/**
- * Generate a collision-safe RegID with retry logic.
- * Attempts up to 5 times before throwing.
- */
-async function generateUniqueRegId(): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const regId = `VV-${Math.floor(100000 + Math.random() * 900000)}`;
-    const existing = await prisma.user.findUnique({ where: { regId } });
-    if (!existing) return regId;
-  }
-  throw new Error('Failed to generate a unique RegID after 5 attempts.');
-}
+const loginSchema = z.object({
+  identifier: z.string().min(3).max(254).trim(),
+  password: z.string().min(1),
+}).strict();
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = registerSchema.parse(req.body);
@@ -95,7 +88,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   // Fire and forget with visible error logging
   if (emailLower) {
     sendWelcomeEmail(emailLower, validatedData.firstName, newRegId)
-      .catch(err => console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message));
+      .catch((err: Error) => console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message));
   }
 
   // Notify Admin of new registration
@@ -116,14 +109,9 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const { identifier, password } = req.body;
+  const { identifier, password } = loginSchema.parse(req.body);
 
-  if (!identifier || !password) {
-    res.status(400).json({ error: 'Provide username (Email, Mobile, or RegID) and password' });
-    return;
-  }
-
-  const idLower = identifier.trim().toLowerCase();
+  const idLower = identifier.toLowerCase();
 
   // Omni-Login Logic
   const user = await prisma.user.findFirst({
