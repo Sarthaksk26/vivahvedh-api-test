@@ -335,10 +335,14 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
     data: { password: hashedPassword, requiresPasswordChange: false },
   });
 
-  // Fire and forget — notify user about password change
-  sendPasswordChangedEmail(user.email || '', user.regId).catch(e => 
-    console.error('[Mail] Password change notification failed:', e)
-  );
+  // Notify user about password change — awaited with try/catch to ensure reliability
+  if (user.email) {
+    try {
+      await sendPasswordChangedEmail(user.email, user.regId);
+    } catch (e: any) {
+      console.error('[Mail] Password change notification failed:', e.message);
+    }
+  }
 
   res.status(200).json({ success: true, message: 'Password changed successfully.' });
 });

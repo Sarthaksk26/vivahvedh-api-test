@@ -188,7 +188,9 @@ export const getPublicProfile = async (req: Request, res: Response) => {
         education: true,
         physical: true,
         astrology: true,
-        images: true
+        images: {
+          orderBy: { isPrimary: 'desc' }
+        }
       }
     });
 

@@ -227,8 +227,18 @@ export const sendEnquiryReplyEmail = async (to: string, name: string, originalMe
   await sendMail(to, `Re: Your Enquiry to Vivahvedh`, html);
 };
 
-export const sendBirthdayWishEmail = async (to: string, name: string) => {
-  const html = `
+export const sendBirthdayWishEmail = async (to: string, name: string, customMessage?: string) => {
+  const html = customMessage ? `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px;">
+      <h1 style="color: #e11d48; margin-bottom: 20px;">🎂 Happy Birthday, ${name}!</h1>
+      <div style="text-align: left; background-color: #f9f9f9; padding: 30px; border-radius: 8px; font-size: 16px; line-height: 1.6; color: #444; white-space: pre-wrap;">
+${customMessage}
+      </div>
+      <div style="margin-top: 40px; font-size: 13px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
+        With love, <b>Vivahvedh Matrimonial Team</b><br/>
+        © ${new Date().getFullYear()} Vivahvedh Matrimonial
+      </div>
+    </div>` : `
     <div style="font-family: Arial, sans-serif; text-align: center; padding: 40px;">
       <h1 style="color: #e11d48;">🎂 Happy Birthday, ${name}!</h1>
       <p style="font-size: 16px;">Namaste <b>${name}</b>,</p>
@@ -243,33 +253,45 @@ export const sendBirthdayWishEmail = async (to: string, name: string) => {
 };
 
 export const sendPasswordChangedEmail = async (to: string, regId: string) => {
-  if (!to) return; // No email on file, skip silently
+  if (!to) return;
   
   const html = `
-    <div style="font-family: Arial, sans-serif; color: #333; padding: 30px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
-      <div style="border-top: 4px solid #e11d48; padding-top: 20px; margin-bottom: 20px;">
-        <h2 style="color: #e11d48; margin: 0;">Password Changed Successfully 🔐</h2>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #f0f0f0; border-radius: 16px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="background-color: #fff1f2; width: 64px; height: 64px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+          <span style="font-size: 32px;">🔐</span>
+        </div>
+        <h2 style="color: #e11d48; margin: 0; font-size: 24px; font-weight: 800;">Password Updated</h2>
+        <p style="color: #666; font-size: 14px; margin-top: 8px;">Security notification for your Vivahvedh account</p>
       </div>
-      <p style="font-size: 16px;">Dear Member <strong>(${regId})</strong>,</p>
-      <p>Your Vivahvedh account password was successfully changed.</p>
-      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; border-radius: 4px; margin: 20px 0;">
-        <p style="margin: 0; font-weight: bold; color: #856404;">
-          ⚠️ If you did NOT make this change, please contact us immediately at 
-          <a href="mailto:${process.env.SMTP_USER}" style="color: #856404;">${process.env.SMTP_USER}</a>
+
+      <div style="background-color: #f8fafc; padding: 24px; border-radius: 12px; border-left: 4px solid #e11d48; margin-bottom: 24px;">
+        <p style="margin: 0; font-size: 16px; line-height: 1.6;">
+          Hello Member <b>(${regId})</b>,
+        </p>
+        <p style="margin: 12px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
+          Your account password was successfully changed on <b>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'medium' })} IST</b>.
         </p>
       </div>
-      <p style="color: #666; font-size: 14px;">
-        Time of change: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
-      </p>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-      <p style="font-size: 12px; color: #999;">
-        Best regards,<br/>Vivahvedh Matrimony Team<br/>
-        © ${new Date().getFullYear()} Vivahvedh Matrimonial
-      </p>
+
+      <div style="background-color: #fffbeb; border: 1px solid #fef3c7; padding: 20px; border-radius: 12px; margin-bottom: 30px;">
+        <h4 style="margin: 0 0 8px; color: #92400e; font-size: 14px; font-weight: 700; text-transform: uppercase; tracking-wider;">Didn't make this change?</h4>
+        <p style="margin: 0; font-size: 14px; color: #b45309; line-height: 1.5;">
+          If you didn't authorize this, your account may have been compromised. Please reset your password immediately or contact our support team at 
+          <a href="mailto:${process.env.SMTP_USER}" style="color: #e11d48; font-weight: 600; text-decoration: none;">${process.env.SMTP_USER}</a>.
+        </p>
+      </div>
+
+      <div style="text-align: center; border-top: 1px solid #eee; padding-top: 30px;">
+        <p style="font-size: 12px; color: #94a3b8; margin: 0;">
+          Vivahvedh Matrimony — Securing your journey to a perfect match.<br/>
+          © ${new Date().getFullYear()} Vivahvedh Matrimonial
+        </p>
+      </div>
     </div>
   `;
   
-  await sendMail(to, '🔐 Password Changed | Vivahvedh Account Security', html);
+  await sendMail(to, '🔐 Security Alert: Your Password was Changed', html);
 };
 
 /**

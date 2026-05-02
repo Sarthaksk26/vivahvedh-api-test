@@ -8,37 +8,38 @@ datasource db {
 }
 
 model User {
-  id                   String           @id @default(uuid())
-  regId                String           @unique
-  email                String?          @unique
-  mobile               String           @unique
-  password             String
-  role                 Role             @default(USER)
-  accountStatus        AccountStatus    @default(INACTIVE)
-  profileCreatedBy     String?
-  requiresPasswordChange Boolean        @default(false)
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  paymentDone          Boolean          @default(false)
-  lastPaidOn           DateTime?
-  planType             PlanType         @default(FREE)
-  planExpiresAt        DateTime?
-  images               Image[]
-  pendingPayments      PendingPayment[]
-  profileViewsReceived ProfileView[]    @relation("ViewedProfile")
-  profileViewsSent     ProfileView[]    @relation("ViewerProfile")
-  receivedRequests     Request[]        @relation("ReceivedRequests")
-  sentRequests         Request[]        @relation("SentRequests")
-  shortlistedBy        Shortlist[]      @relation("ShortlistedBy")
-  shortlistedUsers     Shortlist[]      @relation("ShortlistedUsers")
-  refreshTokens        RefreshToken[]
-  addresses            UserAddress[]
-  astrology            UserAstrology?
-  education            UserEducation?
-  family               UserFamily?
-  physical             UserPhysical?
-  preferences          UserPreferences?
-  profile              UserProfile?
+  id                     String            @id @default(uuid())
+  regId                  String            @unique
+  email                  String?           @unique
+  mobile                 String            @unique
+  password               String
+  role                   Role              @default(USER)
+  accountStatus          AccountStatus     @default(INACTIVE)
+  profileCreatedBy       String?
+  requiresPasswordChange Boolean           @default(false)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  paymentDone            Boolean           @default(false)
+  lastPaidOn             DateTime?
+  planType               PlanType          @default(FREE)
+  planExpiresAt          DateTime?
+  images                 Image[]
+  pendingPayments        PendingPayment[]
+  profileViewsReceived   ProfileView[]     @relation("ViewedProfile")
+  profileViewsSent       ProfileView[]     @relation("ViewerProfile")
+  receivedRequests       Request[]         @relation("ReceivedRequests")
+  sentRequests           Request[]         @relation("SentRequests")
+  shortlistedBy          Shortlist[]       @relation("ShortlistedBy")
+  shortlistedUsers       Shortlist[]       @relation("ShortlistedUsers")
+  refreshTokens          RefreshToken[]
+  addresses              UserAddress[]
+  astrology              UserAstrology?
+  education              UserEducation?
+  family                 UserFamily?
+  physical               UserPhysical?
+  preferences            UserPreferences?
+  profile                UserProfile?
+  birthdayWishes         BirthdayWishLog[]
 
   @@index([planType, createdAt(sort: Desc)])
   @@index([role, accountStatus])
@@ -159,7 +160,7 @@ model UserAddress {
   districtId  Int?
   stateId     Int?
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([state, district, city])
 }
 
@@ -170,7 +171,7 @@ model Image {
   isPrimary Boolean  @default(false)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@index([userId, isPrimary])
 }
 
@@ -223,7 +224,7 @@ model Enquiry {
   message    String
   isResolved Boolean  @default(false)
   createdAt  DateTime @default(now())
-  
+
   @@index([isResolved, createdAt])
 }
 
@@ -302,7 +303,7 @@ model SuccessStory {
   submittedBy String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  
+
   @@index([status, createdAt])
 }
 
@@ -354,4 +355,16 @@ enum PlanType {
   FREE
   SILVER
   GOLD
+}
+
+model BirthdayWishLog {
+  id          String   @id @default(uuid())
+  userId      String
+  emailSentTo String
+  message     String   @db.Text
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }

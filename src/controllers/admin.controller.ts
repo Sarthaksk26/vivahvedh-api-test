@@ -390,8 +390,35 @@ export const getUpcomingBirthdays = asyncHandler(async (req: Request, res: Respo
   res.status(200).json(upcoming);
 });
 
+export const getBirthdayPreview = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const user = await prisma.user.findUnique({ 
+    where: { id }, 
+    include: { profile: true } 
+  });
+  
+  if (!user || !user.email) {
+    res.status(404).json({ error: 'User not found or no email.' });
+    return;
+  }
+
+  const name = user.profile?.firstName || 'Member';
+  
+  // Return the raw text for editing in the frontend textarea
+  const defaultMessage = `Namaste ${name},\n\nWishing you a wonderful birthday filled with joy and happiness.\n\nMay this year bring you your perfect life partner!\n\nBest regards,\nVivahvedh Team`;
+
+  res.status(200).json({ 
+    email: user.email,
+    name,
+    defaultMessage,
+    subject: `🎂 Happy Birthday ${name}! | Vivahvedh`
+  });
+});
+
 export const sendBirthdayWish = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
+  const { message } = req.body;
+
   const user = await prisma.user.findUnique({ where: { id }, include: { profile: true } });
   
   if (!user || !user.email) {
@@ -400,9 +427,34 @@ export const sendBirthdayWish = asyncHandler(async (req: Request, res: Response)
   }
 
   const { sendBirthdayWishEmail } = await import('../services/mail.service');
-  await sendBirthdayWishEmail(user.email, user.profile?.firstName || 'Member');
+  await sendBirthdayWishEmail(user.email, user.profile?.firstName || 'Member', message);
+
+  // Log the wish
+  await prisma.birthdayWishLog.create({
+    data: {
+      userId: user.id,
+      emailSentTo: user.email,
+      message: message || 'Default Birthday Wish'
+    }
+  });
 
   res.status(200).json({ message: 'Birthday wishes sent!' });
+});
+
+export const getBirthdayWishLogs = asyncHandler(async (req: Request, res: Response) => {
+  const logs = await prisma.birthdayWishLog.findMany({
+    include: {
+      user: {
+        include: {
+          profile: { select: { firstName: true, lastName: true } }
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+
+  res.status(200).json(logs);
 });
 
 export const getConnectionLogs = asyncHandler(async (req: Request, res: Response) => {
