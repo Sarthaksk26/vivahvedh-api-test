@@ -13,7 +13,9 @@ import {
   getAdminStats,
   updateUserByAdmin,
   getUpcomingBirthdays,
+  getBirthdayPreview,
   sendBirthdayWish,
+  getBirthdayWishLogs,
   getConnectionLogs,
   getProfitStats,
   getAllUsersWithLocation
@@ -67,7 +69,9 @@ router.post('/users/create', requireAuth, requireAdmin, createOfflineUser);
 
 // Birthdays
 router.get('/birthdays', requireAuth, requireAdmin, getUpcomingBirthdays);
+router.get('/birthdays/preview/:id', requireAuth, requireAdmin, getBirthdayPreview);
 router.post('/birthdays/send-wishes/:id', requireAuth, requireAdmin, sendBirthdayWish);
+router.get('/birthdays/logs', requireAuth, requireAdmin, getBirthdayWishLogs);
 
 // Connections
 router.get('/connections', requireAuth, requireAdmin, getConnectionLogs);
