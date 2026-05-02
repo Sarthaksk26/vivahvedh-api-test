@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 5000;
 
 // Warn about missing email config on startup
 const requiredEnvVars = ['JWT_SECRET'];
-const optionalButImportant = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'CLIENT_URL'];
+const optionalButImportant = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'CLIENT_URL', 'JWT_REFRESH_SECRET'];
 
 requiredEnvVars.forEach(key => {
   if (!process.env[key]) {

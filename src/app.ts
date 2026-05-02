@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import authRoutes from './routes/auth.routes';
@@ -38,29 +39,52 @@ app.use(cors({
     }
 
     callback(new Error('Not allowed by CORS'));
-  }
+  },
+  credentials: true, // Required for HttpOnly cookie transmission
 }));
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 
 // 3. Basic Health Checks (Publicly accessible)
 app.get('/', (req, res) => res.status(200).send('Vivahvedh API is live.'));
 app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
 
-// 4. Rate Limiting
+// 4. Rate Limiting — Global
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: { error: 'Too many requests.' }
+  message: { error: 'Too many requests.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api', globalLimiter);
+
+// 4b. Rate Limiting — Isolated Auth Limiters (Directive 4: Security Hardening)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Too many refresh attempts.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: { error: 'Too many auth attempts.' }
+  message: { error: 'Too many auth attempts.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // 5. Static Files
@@ -75,7 +99,9 @@ app.use('/api/uploads', (req, res, next) => {
   next();
 }, express.static(UPLOADS_PATH));
 
-// 6. API Routes
+// 6. API Routes — Auth routes get isolated rate limiters
+app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/refresh', refreshLimiter);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/search', searchRoutes);

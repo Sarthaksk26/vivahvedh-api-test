@@ -31,6 +31,7 @@ model User {
   sentRequests         Request[]        @relation("SentRequests")
   shortlistedBy        Shortlist[]      @relation("ShortlistedBy")
   shortlistedUsers     Shortlist[]      @relation("ShortlistedUsers")
+  refreshTokens        RefreshToken[]
   addresses            UserAddress[]
   astrology            UserAstrology?
   education            UserEducation?
@@ -41,6 +42,18 @@ model User {
 
   @@index([planType, createdAt(sort: Desc)])
   @@index([role, accountStatus])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserProfile {
