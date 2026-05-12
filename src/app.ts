@@ -48,6 +48,49 @@ app.use(helmet({
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 
+// ═══════════════════════════════════════════════════════════════════
+//  Anti-CSRF Origin Validation Middleware
+//  Since cookies use SameSite='none' for cross-origin deployment,
+//  we must validate Origin/Referer on all state-changing requests.
+// ═══════════════════════════════════════════════════════════════════
+app.use((req, res, next) => {
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (safeMethods.includes(req.method)) return next();
+
+  // Non-browser clients (cURL, Postman, server-to-server) send no Origin — allow
+  const origin = req.headers['origin'] as string | undefined;
+  const referer = req.headers['referer'] as string | undefined;
+
+  if (!origin && !referer) return next();
+
+  // Validate Origin header first, then fall back to Referer
+  if (origin) {
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return next();
+    }
+    console.warn(`[CSRF] Blocked request from origin: ${origin} to ${req.method} ${req.originalUrl}`);
+    res.status(403).json({ error: 'Forbidden: Origin not allowed.' });
+    return;
+  }
+
+  // Extract origin from Referer header
+  if (referer) {
+    try {
+      const refererOrigin = new URL(referer).origin;
+      if (allowedOrigins.length === 0 || allowedOrigins.includes(refererOrigin)) {
+        return next();
+      }
+    } catch {
+      // Malformed referer — reject
+    }
+    console.warn(`[CSRF] Blocked request from referer: ${referer} to ${req.method} ${req.originalUrl}`);
+    res.status(403).json({ error: 'Forbidden: Referer not allowed.' });
+    return;
+  }
+
+  next();
+});
+
 // 3. Basic Health Checks (Publicly accessible)
 app.get('/', (req, res) => res.status(200).send('Vivahvedh API is live.'));
 app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));

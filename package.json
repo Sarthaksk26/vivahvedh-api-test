@@ -9,7 +9,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "npx tsc",
+    "build": "npx prisma generate && npx tsc",
     "start": "node dist/server.js"
   },
   "keywords": [],

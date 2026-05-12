@@ -251,6 +251,7 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
       email: emailLower,
       password: hashedPassword,
       accountStatus: 'ACTIVE',
+      planType: 'FREE',
       requiresPasswordChange: true,
       profileCreatedBy: validatedData.profileCreatedBy || 'Marriage Bureau',
       profile: {
