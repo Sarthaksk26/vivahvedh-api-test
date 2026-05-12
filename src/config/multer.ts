@@ -6,12 +6,19 @@ import { Request, Response, NextFunction } from 'express';
 import { StorageService } from '../services/storage.service';
 
 // ── Directory setup ─────────────────────────────────────────────────
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+const isVercel = process.env.VERCEL === '1';
+const UPLOAD_DIR = isVercel 
+  ? path.join('/tmp', 'uploads') 
+  : path.join(process.cwd(), 'uploads');
 const DOCS_DIR = path.join(UPLOAD_DIR, 'docs');
 
 for (const dir of [UPLOAD_DIR, DOCS_DIR]) {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (error) {
+      console.warn(`[Multer Config] Could not create directory ${dir}:`, error);
+    }
   }
 }
 
