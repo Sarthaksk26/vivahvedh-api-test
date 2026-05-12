@@ -153,7 +153,8 @@ export const replyToEnquiry = asyncHandler(async (req: Request, res: Response) =
     return;
   }
 
-  await sendEnquiryReplyEmail(enquiry.email, enquiry.firstName, enquiry.message, replyMessage);
+  await sendEnquiryReplyEmail(enquiry.email, enquiry.firstName, enquiry.message, replyMessage)
+    .catch((err: Error) => console.error(`[Mail] Enquiry reply email failed for ${enquiry.email}:`, err.message));
 
   await prisma.enquiry.update({
     where: { id: enquiryId },
@@ -179,16 +180,20 @@ export const markEnquiryResolved = asyncHandler(async (req: Request, res: Respon
 });
 
 export const setUserPlan = asyncHandler(async (req: Request, res: Response) => {
-  const { targetUserId, planType, durationMonths } = req.body;
+  const { targetUserId, planType } = req.body;
 
   if (!['FREE', 'SILVER', 'GOLD'].includes(planType)) {
     res.status(400).json({ error: 'Invalid plan type. Must be FREE, SILVER, or GOLD.' });
     return;
   }
 
-  const planExpiresAt = planType === 'FREE' 
-    ? null 
-    : new Date(Date.now() + (durationMonths || 6) * 30 * 24 * 60 * 60 * 1000);
+  // Both SILVER and GOLD plans have a standardized 12-month duration
+  let planExpiresAt: Date | null = null;
+  if (planType !== 'FREE') {
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + 12);
+    planExpiresAt = expiresAt;
+  }
 
   const updatedUser = await prisma.user.update({
     where: { id: targetUserId },

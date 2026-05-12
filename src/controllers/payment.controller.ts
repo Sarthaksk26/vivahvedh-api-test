@@ -104,7 +104,8 @@ export const updatePaymentStatus = asyncHandler(async (req: Request, res: Respon
 
   await prisma.$transaction(async (tx) => {
     if (status === 'APPROVED') {
-      const durationMonths = payment.planType === 'GOLD' ? 12 : payment.planType === 'SILVER' ? 6 : 0;
+      // Both SILVER and GOLD plans have a standardized 12-month duration
+      const durationMonths = (payment.planType === 'GOLD' || payment.planType === 'SILVER') ? 12 : 0;
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
 
