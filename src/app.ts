@@ -18,7 +18,7 @@ const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 // 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
