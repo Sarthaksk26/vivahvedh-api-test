@@ -24,6 +24,9 @@ model User {
   lastPaidOn             DateTime?
   planType               PlanType          @default(FREE)
   planExpiresAt          DateTime?
+  kycDocumentUrl         String?
+  kycType                KYCType?
+  kycVerified            Boolean           @default(false)
   images                 Image[]
   pendingPayments        PendingPayment[]
   profileViewsReceived   ProfileView[]     @relation("ViewedProfile")
@@ -62,7 +65,7 @@ model UserProfile {
   id            String        @id @default(uuid())
   userId        String        @unique
   firstName     String
-  middleName    String?
+  middleName    String        @default("")
   lastName      String
   gender        Gender
   maritalStatus MaritalStatus
@@ -80,18 +83,19 @@ model UserProfile {
 }
 
 model UserPhysical {
-  id         String   @id @default(uuid())
-  userId     String   @unique
-  height     String?
-  weight     Int?
-  bloodGroup String?
-  complexion String?
-  health     String?
-  disease    String?
-  diet       String?
-  smoke      Boolean?
-  drink      Boolean?
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  height           String?
+  weight           Int?
+  bloodGroup       String?
+  complexion       String?
+  health           String?
+  disease          String?
+  diet             String?
+  smoke            Boolean?
+  drink            Boolean?
+  medicalReportUrl String?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserAstrology {
@@ -117,6 +121,7 @@ model UserEducation {
   jobAddress         String?
   annualIncome       String?
   specialAchievement String?
+  incomeProofUrl     String?
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -317,6 +322,12 @@ enum StoryStatus {
 enum Role {
   USER
   ADMIN
+}
+
+enum KYCType {
+  AADHAR
+  PAN
+  PASSPORT
 }
 
 enum Gender {

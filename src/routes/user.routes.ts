@@ -2,10 +2,10 @@ import { Router } from 'express';
 import {
   getMyProfile, uploadPhoto, deletePhoto, setProfilePhoto, updateProfile,
   changePassword, shortlistProfile, getMyShortlist,
-  getProfileViewers
+  getProfileViewers, uploadKyc, uploadIncomeProof, uploadMedicalReport
 } from '../controllers/user.controller';
 import { requireAuth, requireActivePassword, requireActiveAccount } from '../middleware/auth.middleware';
-import { upload, processImage } from '../config/multer';
+import { upload, processImage, uploadDocument, processDocument } from '../config/multer';
 
 const router = Router();
 
@@ -20,6 +20,9 @@ router.use(requireAuth, requireActivePassword, requireActiveAccount);
 
 router.get('/profile', getMyProfile);
 router.post('/upload-photo', upload.single('photo'), processImage, uploadPhoto);
+router.post('/upload-kyc', uploadDocument.single('document'), processDocument, uploadKyc);
+router.post('/upload-income-proof', uploadDocument.single('document'), processDocument, uploadIncomeProof);
+router.post('/upload-medical-report', uploadDocument.single('document'), processDocument, uploadMedicalReport);
 router.patch('/update', updateProfile);
 
 // Shortlist

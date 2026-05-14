@@ -12,6 +12,7 @@ import {
   createOfflineUser,
   getAdminStats,
   updateUserByAdmin,
+  updateKycStatus,
   getUpcomingBirthdays,
   getBirthdayPreview,
   sendBirthdayWish,
@@ -39,6 +40,9 @@ router.get('/all-users', requireAuth, requireAdmin, getAllUsers);
 
 // Location-based user search (must be before /users/:id to avoid route conflict)
 router.get('/users/by-location', requireAuth, requireAdmin, getAllUsersWithLocation);
+
+// @route   PATCH /api/admin/users/:id/kyc
+router.patch('/users/:id/kyc', requireAuth, requireAdmin, updateKycStatus);
 
 // @route   PATCH /api/admin/users/:id
 router.patch('/users/:id', requireAuth, requireAdmin, updateUserByAdmin);

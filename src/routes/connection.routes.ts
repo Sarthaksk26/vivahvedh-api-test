@@ -5,7 +5,8 @@ import {
   rejectInterest, 
   getMyConnections, 
   withdrawInterest,
-  getStatusBetweenUsers
+  getStatusBetweenUsers,
+  requestContact
 } from '../controllers/connection.controller';
 import { requireAuth, requireActiveAccount } from '../middleware/auth.middleware';
 
@@ -16,6 +17,7 @@ router.post('/send', requireAuth, requireActiveAccount, sendInterest);
 router.post('/accept', requireAuth, requireActiveAccount, acceptInterest);
 router.post('/reject', requireAuth, requireActiveAccount, rejectInterest);
 router.post('/withdraw', requireAuth, requireActiveAccount, withdrawInterest);
+router.post('/request-contact', requireAuth, requireActiveAccount, requestContact);
 
 // DATA: require only auth
 router.get('/my-connections', requireAuth, getMyConnections);

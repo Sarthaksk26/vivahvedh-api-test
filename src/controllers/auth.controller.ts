@@ -22,6 +22,7 @@ const registerSchema = z.object({
   mobile: z.string().min(10).max(15).regex(/^[0-9]+$/, 'Mobile must contain only digits'),
   password: z.string().min(8).max(100),
   firstName: z.string().min(1).max(100).trim(),
+  middleName: z.string().min(1).max(100).trim(),
   lastName: z.string().min(1).max(100).trim(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
@@ -107,6 +108,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       profile: {
         create: {
           firstName: validatedData.firstName,
+          middleName: validatedData.middleName,
           lastName: validatedData.lastName,
           gender: validatedData.gender,
           maritalStatus: validatedData.maritalStatus,

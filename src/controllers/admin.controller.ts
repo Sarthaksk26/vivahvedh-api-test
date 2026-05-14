@@ -62,7 +62,8 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
   const allUsers = await prisma.user.findMany({
     where: baseWhere,
     include: { profile: true, images: { orderBy: { isPrimary: 'desc' } } },
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    take: 100
   });
   res.status(200).json(allUsers);
 });
@@ -295,10 +296,17 @@ export const getAdminStats = asyncHandler(async (req: Request, res: Response) =>
 });
 
 const updateUserByAdminSchema = z.object({
-  email: z.string().email().optional(),
+  // Account-level fields
+  email: z.string().email().optional().nullable(),
   mobile: z.string().min(10).max(15).optional(),
+  accountStatus: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED']).optional(),
+  planType: z.enum(['FREE', 'SILVER', 'GOLD']).optional(),
+  paymentDone: z.boolean().optional(),
+
+  // Profile
   profile: z.object({
     firstName: z.string().min(1).max(100).optional(),
+    middleName: z.string().max(100).optional(),
     lastName: z.string().min(1).max(100).optional(),
     gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
     maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']).optional(),
@@ -306,37 +314,79 @@ const updateUserByAdminSchema = z.object({
     birthPlace: z.string().max(200).optional().nullable(),
     aboutMe: z.string().max(2000).optional().nullable(),
   }).optional(),
+
+  // Physical — ALL fields
   physical: z.object({
     height: z.string().max(50).optional().nullable(),
     weight: z.number().int().min(20).max(300).optional().nullable(),
     bloodGroup: z.string().max(10).optional().nullable(),
     complexion: z.string().max(50).optional().nullable(),
+    health: z.string().max(200).optional().nullable(),
+    disease: z.string().max(200).optional().nullable(),
     diet: z.string().max(50).optional().nullable(),
+    smoke: z.boolean().optional().nullable(),
+    drink: z.boolean().optional().nullable(),
   }).optional(),
+
+  // Education — ALL fields
   education: z.object({
     trade: z.string().max(200).optional().nullable(),
     college: z.string().max(300).optional().nullable(),
     jobBusiness: z.string().max(300).optional().nullable(),
+    jobAddress: z.string().max(500).optional().nullable(),
     annualIncome: z.string().max(100).optional().nullable(),
+    specialAchievement: z.string().max(500).optional().nullable(),
   }).optional(),
+
+  // Family — ALL fields
   family: z.object({
     fatherName: z.string().max(100).optional().nullable(),
+    fatherOccupation: z.string().max(200).optional().nullable(),
     motherName: z.string().max(100).optional().nullable(),
-    familyBackground: z.string().max(1000).optional().nullable(),
+    motherOccupation: z.string().max(200).optional().nullable(),
     motherHometown: z.string().max(200).optional().nullable(),
+    maternalUncleName: z.string().max(100).optional().nullable(),
+    brothers: z.number().int().min(0).max(20).optional(),
+    marriedBrothers: z.number().int().min(0).max(20).optional(),
+    sisters: z.number().int().min(0).max(20).optional(),
+    marriedSisters: z.number().int().min(0).max(20).optional(),
+    relativesSirnames: z.string().max(500).optional().nullable(),
+    familyBackground: z.string().max(1000).optional().nullable(),
+    familyWealth: z.string().max(1000).optional().nullable(),
+    agricultureLand: z.string().max(500).optional().nullable(),
+    plot: z.string().max(500).optional().nullable(),
+    flat: z.string().max(500).optional().nullable(),
   }).optional(),
+
+  // Astrology — ALL fields
   astrology: z.object({
     gothra: z.string().max(100).optional().nullable(),
     rashi: z.string().max(100).optional().nullable(),
     nakshatra: z.string().max(100).optional().nullable(),
+    charan: z.string().max(50).optional().nullable(),
+    nadi: z.string().max(50).optional().nullable(),
+    gan: z.string().max(50).optional().nullable(),
     mangal: z.string().max(50).optional().nullable(),
   }).optional(),
-}).strict();
+
+  // Address
+  address: z.object({
+    addressLine: z.string().max(500).optional().nullable(),
+    city: z.string().max(100).optional().nullable(),
+    district: z.string().max(100).optional().nullable(),
+    state: z.string().max(100).optional().nullable(),
+  }).optional(),
+
+  // Preferences
+  preferences: z.object({
+    expectations: z.string().max(2000).optional().nullable(),
+  }).optional(),
+});
 
 export const updateUserByAdmin = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const validated = updateUserByAdminSchema.parse(req.body);
-  const { email, mobile, profile, physical, education, family, astrology } = validated;
+  const { email, mobile, accountStatus, planType, paymentDone, profile, physical, education, family, astrology, address, preferences } = validated;
 
   const targetUser = await prisma.user.findUnique({ where: { id } });
   if (!targetUser) {
@@ -345,20 +395,41 @@ export const updateUserByAdmin = asyncHandler(async (req: Request, res: Response
   }
 
   const accountUpdate: any = {};
-  if (email) accountUpdate.email = email.toLowerCase();
+  if (email !== undefined) accountUpdate.email = email ? email.toLowerCase() : null;
   if (mobile) accountUpdate.mobile = mobile;
+  if (accountStatus) accountUpdate.accountStatus = accountStatus;
+  if (planType) accountUpdate.planType = planType;
+  if (paymentDone !== undefined) accountUpdate.paymentDone = paymentDone;
+
+  // Build profile upsert — must include required fields for create
+  const profileCreate = profile ? {
+    firstName: profile.firstName || targetUser.regId,
+    middleName: profile.middleName || '',
+    lastName: profile.lastName || '',
+    gender: profile.gender || 'MALE' as const,
+    maritalStatus: profile.maritalStatus || 'UNMARRIED' as const,
+    ...profile,
+  } : undefined;
 
   const updatedUser = await prisma.user.update({
     where: { id },
     data: {
       ...accountUpdate,
-      ...(profile && { profile: { upsert: { create: profile, update: profile } } }),
+      ...(profile && { profile: { upsert: { create: profileCreate!, update: profile } } }),
       ...(physical && { physical: { upsert: { create: physical, update: physical } } }),
       ...(education && { education: { upsert: { create: education, update: education } } }),
       ...(family && { family: { upsert: { create: family, update: family } } }),
       ...(astrology && { astrology: { upsert: { create: astrology, update: astrology } } }),
+      ...(preferences && { preferences: { upsert: { create: preferences, update: preferences } } }),
+      ...(address && { addresses: {
+        upsert: {
+          where: { id: (await prisma.userAddress.findFirst({ where: { userId: id } }))?.id || '' },
+          create: { addressType: 'PRIMARY', ...address },
+          update: address,
+        }
+      }}),
     },
-    include: { profile: true, physical: true, education: true, family: true, astrology: true }
+    include: { profile: true, physical: true, education: true, family: true, astrology: true, addresses: true, preferences: true }
   });
 
   res.status(200).json({ message: 'User updated successfully.', user: updatedUser });
@@ -590,4 +661,22 @@ export const getAllUsersWithLocation = asyncHandler(async (req: Request, res: Re
   });
 
   res.status(200).json(users);
+});
+
+export const updateKycStatus = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { kycVerified } = req.body;
+  
+  if (typeof kycVerified !== 'boolean') {
+    res.status(400).json({ error: 'kycVerified must be a boolean' });
+    return;
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id },
+    data: { kycVerified },
+    include: { profile: true }
+  });
+
+  res.status(200).json({ message: 'KYC status updated successfully.', user: updatedUser });
 });

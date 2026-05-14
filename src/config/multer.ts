@@ -87,18 +87,29 @@ const documentFilter = (_req: Express.Request, file: Express.Multer.File, cb: mu
   }
 };
 
-const documentStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, DOCS_DIR),
-  filename: (_req, file, cb) => {
-    cb(null, sanitizeFilename(file.originalname));
-  },
-});
-
 export const uploadDocument = multer({
-  storage: documentStorage,
+  storage: multer.memoryStorage(),
   fileFilter: documentFilter,
   limits: { 
     fileSize: 10 * 1024 * 1024, // 10 MB (reduced from 20)
     files: 1,
   },
 });
+
+export const processDocument = async (req: Request, _res: Response, next: NextFunction) => {
+  if (!req.file) return next();
+
+  try {
+    const userId = (req as any).user?.id || 'anon';
+    const filename = `doc-${userId}-${Date.now()}-${Math.round(Math.random() * 1e4)}.pdf`;
+
+    const url = await StorageService.uploadDocument(req.file.buffer, filename);
+
+    req.file.path = url;
+    req.file.filename = filename;
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

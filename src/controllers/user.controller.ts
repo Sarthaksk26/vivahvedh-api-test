@@ -62,6 +62,7 @@ const educationSchema = z.object({
   jobAddress:         z.string().max(500).optional().nullable(),
   annualIncome:       z.string().max(100).optional().nullable(),
   specialAchievement: z.string().max(500).optional().nullable(),
+  incomeProofUrl:     z.string().url().optional().nullable(),
 }).strict();
 
 const physicalSchema = z.object({
@@ -74,6 +75,7 @@ const physicalSchema = z.object({
   diet:       z.string().max(50).optional().nullable(),
   smoke:      z.preprocess((val) => val === 'true' ? true : val === 'false' ? false : val === '' ? null : val, z.boolean().optional().nullable()),
   drink:      z.preprocess((val) => val === 'true' ? true : val === 'false' ? false : val === '' ? null : val, z.boolean().optional().nullable()),
+  medicalReportUrl: z.string().url().optional().nullable(),
 }).strict();
 
 const astrologySchema = z.object({
@@ -102,6 +104,9 @@ const addressSchema = z.object({
 }).strict();
 
 const updateProfileBodySchema = z.object({
+  user:        z.object({
+                 kycType: z.enum(['AADHAR', 'PAN', 'PASSPORT']).optional().nullable(),
+               }).strict().optional(),
   profile:     profileSchema.optional(),
   family:      familySchema.optional(),
   education:   educationSchema.optional(),
@@ -180,6 +185,59 @@ export const uploadPhoto = asyncHandler(async (req: Request, res: Response) => {
   });
 
   res.status(200).json({ success: true, photoUrl });
+});
+
+export const uploadKyc = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.file) throw new AppError('No document file provided.', 400);
+
+  const userId = req.user.id;
+  const documentUrl = req.file.path;
+  const { kycType } = req.body;
+
+  if (!kycType || !['AADHAR', 'PAN', 'PASSPORT'].includes(kycType)) {
+    throw new AppError('Invalid or missing kycType. Allowed: AADHAR, PAN, PASSPORT.', 400);
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      kycDocumentUrl: documentUrl,
+      kycType: kycType as any,
+      kycVerified: false,
+    },
+  });
+
+  res.status(200).json({ success: true, documentUrl, message: 'KYC Document uploaded successfully.' });
+});
+
+export const uploadIncomeProof = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.file) throw new AppError('No document file provided.', 400);
+
+  const userId = req.user.id;
+  const documentUrl = req.file.path;
+
+  await prisma.userEducation.upsert({
+    where: { userId },
+    update: { incomeProofUrl: documentUrl },
+    create: { userId, incomeProofUrl: documentUrl },
+  });
+
+  res.status(200).json({ success: true, documentUrl, message: 'Income Proof uploaded successfully.' });
+});
+
+export const uploadMedicalReport = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.file) throw new AppError('No document file provided.', 400);
+
+  const userId = req.user.id;
+  const documentUrl = req.file.path;
+
+  await prisma.userPhysical.upsert({
+    where: { userId },
+    update: { medicalReportUrl: documentUrl },
+    create: { userId, medicalReportUrl: documentUrl },
+  });
+
+  res.status(200).json({ success: true, documentUrl, message: 'Medical Report uploaded successfully.' });
 });
 
 export const deletePhoto = asyncHandler(async (req: Request, res: Response) => {
@@ -276,6 +334,10 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
         ? { update: section }
         : { create: section };
     }
+  }
+
+  if (data.user && Object.keys(data.user).length > 0) {
+    Object.assign(prismaData, data.user);
   }
 
   if (data.addresses && Object.keys(data.addresses).length > 0) {

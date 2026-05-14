@@ -294,6 +294,31 @@ export const sendPasswordChangedEmail = async (to: string, regId: string) => {
   await sendMail(to, '🔐 Security Alert: Your Password was Changed', html);
 };
 
+export const sendContactDetailsEmail = async (to: string, targetUserName: string, targetContactInfo: { mobile: string; email: string }) => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px;">
+      <h2 style="color: #e11d48; margin-bottom: 20px; text-align: center;">Contact Details Requested</h2>
+      <p style="font-size: 16px;">Dear Member,</p>
+      <p>As requested, here are the contact details for <b>${targetUserName}</b>:</p>
+      
+      <div style="background: #fdfdfd; border-left: 4px solid #e11d48; padding: 15px; margin: 20px 0; border-radius: 4px;">
+        <p style="margin: 0 0 10px 0;"><b>Mobile:</b> <a href="tel:${targetContactInfo.mobile}" style="color: #e11d48; text-decoration: none;">${targetContactInfo.mobile}</a></p>
+        <p style="margin: 0;"><b>Email:</b> <a href="mailto:${targetContactInfo.email}" style="color: #e11d48; text-decoration: none;">${targetContactInfo.email}</a></p>
+      </div>
+      
+      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; border-radius: 4px; margin: 20px 0;">
+        <p style="margin: 0; font-size: 13px; color: #856404;">⚠️ <b>Privacy Notice:</b> Please respect the member's privacy and use these details solely for matrimonial communication.</p>
+      </div>
+      
+      <div style="margin-top: 30px; font-size: 12px; color: #999; text-align: center;">
+        <p>Best regards,<br>Vivahvedh Matchmaking Team</p>
+      </div>
+    </div>
+  `;
+  
+  await sendMail(to, `Contact Details for ${targetUserName} | Vivahvedh`, html);
+};
+
 /**
  * Notify admin of system events (New Registration, Proposals, Stories, etc.)
  */

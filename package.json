@@ -9,6 +9,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "cron:cleanup": "ts-node src/scripts/cron.ts",
     "build": "npx prisma generate && npx tsc",
     "start": "node dist/server.js",
     "postinstall": "npx prisma generate"

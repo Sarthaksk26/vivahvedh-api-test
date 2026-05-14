@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import prisma from '../config/db';
-import { sendConnectionRequestEmail, sendConnectionAcceptedEmail } from '../services/mail.service';
+import { sendConnectionRequestEmail, sendConnectionAcceptedEmail, sendContactDetailsEmail } from '../services/mail.service';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../utils/AppError';
 
 // 1. Send an Interest Request to another user
 const sendInterestSchema = z.object({
@@ -239,6 +240,50 @@ export const getStatusBetweenUsers = asyncHandler(async (req: Request, res: Resp
   res.status(200).json({ 
     status: displayStatus,
     requestId: request.id
+  });
+});
+
+const requestContactSchema = z.object({
+  targetUserId: z.string().uuid().or(z.string().cuid()).or(z.string().min(1)),
+}).strict();
+
+export const requestContact = asyncHandler(async (req: Request, res: Response) => {
+  const { targetUserId } = requestContactSchema.parse(req.body);
+  const currentUserId = req.user.id;
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: currentUserId },
+    select: { email: true, planType: true }
+  });
+
+  if (!currentUser) throw new AppError('User not found.', 404);
+  if (!currentUser.email) throw new AppError('You must have an email address to receive contact details.', 400);
+
+  if (currentUser.planType !== 'SILVER' && currentUser.planType !== 'GOLD') {
+    res.status(403).json({
+      error: "Upgrade to Silver or Gold plan to request contact details directly.",
+      code: "PLAN_UPGRADE_REQUIRED"
+    });
+    return;
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: { profile: true }
+  });
+
+  if (!targetUser) throw new AppError('Target user not found.', 404);
+
+  const targetName = targetUser.profile ? `${targetUser.profile.firstName} ${targetUser.profile.lastName}` : 'Member';
+  const targetContactInfo = {
+    mobile: targetUser.mobile,
+    email: targetUser.email || 'No email provided',
+  };
+
+  await sendContactDetailsEmail(currentUser.email, targetName, targetContactInfo);
+
+  res.status(200).json({ 
+    message: "Contact details have been sent to your registered email securely."
   });
 });
 

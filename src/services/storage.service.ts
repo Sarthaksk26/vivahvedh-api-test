@@ -78,6 +78,38 @@ export class StorageService {
   }
 
   /**
+   * Uploads a document buffer to storage (Cloudinary as raw, or Local)
+   * @param buffer Document buffer
+   * @param filename Desired filename
+   * @returns URL of the uploaded document
+   */
+  static async uploadDocument(buffer: Buffer, filename: string): Promise<string> {
+    if (useCloudinary) {
+      return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'vivahvedh/documents',
+            resource_type: 'raw',
+          },
+          (error: any, result: any) => {
+            if (error) return reject(error);
+            resolve(result!.secure_url);
+          }
+        );
+        uploadStream.end(buffer);
+      });
+    } else {
+      const DOCS_DIR = path.join(UPLOAD_DIR, 'docs');
+      if (!fs.existsSync(DOCS_DIR)) {
+        fs.mkdirSync(DOCS_DIR, { recursive: true });
+      }
+      const outputPath = path.join(DOCS_DIR, filename);
+      await fs.promises.writeFile(outputPath, buffer);
+      return `/uploads/docs/${filename}`;
+    }
+  }
+
+  /**
    * Deletes an image from storage
    * @param url URL or filename of the image
    */

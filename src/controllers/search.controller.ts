@@ -4,12 +4,115 @@ import prisma from '../config/db';
 import { maskPrivateDetails } from '../utils/sanitize';
 
 // ═══════════════════════════════════════════════════════════════════
-//  GET /api/search — Cursor-Based Matchmaking Search
+//  Weighted Match Scoring Engine
+// ═══════════════════════════════════════════════════════════════════
+
+interface ScoringContext {
+  querierGender?: string;
+  querierCasteId?: number | null;
+  querierDiet?: string | null;
+  querierCity?: string | null;
+  querierDistrict?: string | null;
+  querierState?: string | null;
+  querierTrade?: string | null;
+  querierRashi?: string | null;
+  querierNadi?: string | null;
+  querierExpectations?: string | null;
+}
+
+const PLAN_WEIGHT: Record<string, number> = {
+  GOLD: 30,
+  SILVER: 15,
+  FREE: 0,
+};
+
+/**
+ * Computes a weighted match score (0–100) for a candidate relative to the querier.
+ * 
+ * Scoring Breakdown:
+ *   - Plan Tier Boost:       0–30 pts
+ *   - Caste Match:           0–20 pts
+ *   - Location Proximity:    0–15 pts  (same city > same district > same state)
+ *   - Diet Compatibility:    0–10 pts
+ *   - Education Field Match: 0–10 pts
+ *   - Astrology (Nadi):      0–10 pts  (nadi mismatch is preferred in matchmaking)
+ *   - Profile Completeness:  0–5 pts
+ */
+function computeMatchScore(
+  candidate: Record<string, any>,
+  ctx: ScoringContext
+): number {
+  let score = 0;
+
+  // 1. Plan Tier Boost (0-30)
+  score += PLAN_WEIGHT[candidate.planType] ?? 0;
+
+  // 2. Caste Match (0-20)
+  if (ctx.querierCasteId && candidate.profile?.casteId) {
+    if (candidate.profile.casteId === ctx.querierCasteId) {
+      score += 20;
+    }
+  }
+
+  // 3. Location Proximity (0-15)
+  const candidateAddr = candidate.addresses?.[0];
+  if (candidateAddr) {
+    if (ctx.querierCity && candidateAddr.city?.toLowerCase() === ctx.querierCity.toLowerCase()) {
+      score += 15;
+    } else if (ctx.querierDistrict && candidateAddr.district?.toLowerCase() === ctx.querierDistrict.toLowerCase()) {
+      score += 10;
+    } else if (ctx.querierState && candidateAddr.state?.toLowerCase() === ctx.querierState.toLowerCase()) {
+      score += 5;
+    }
+  }
+
+  // 4. Diet Compatibility (0-10)
+  if (ctx.querierDiet && candidate.physical?.diet) {
+    if (candidate.physical.diet.toLowerCase() === ctx.querierDiet.toLowerCase()) {
+      score += 10;
+    }
+  }
+
+  // 5. Education/Trade similarity (0-10)
+  if (ctx.querierTrade && candidate.education?.trade) {
+    const qTokens = ctx.querierTrade.toLowerCase().split(/[\s,./]+/);
+    const cTokens = candidate.education.trade.toLowerCase().split(/[\s,./]+/);
+    const overlap = qTokens.filter((t: string) => cTokens.includes(t)).length;
+    if (overlap > 0) {
+      score += Math.min(10, overlap * 5);
+    }
+  }
+
+  // 6. Nadi Compatibility (0-10) — different nadi is traditionally preferred
+  if (ctx.querierNadi && candidate.astrology?.nadi) {
+    if (candidate.astrology.nadi !== ctx.querierNadi) {
+      score += 10;
+    }
+  }
+
+  // 7. Profile Completeness (0-5)
+  let completeness = 0;
+  if (candidate.profile?.aboutMe) completeness++;
+  if (candidate.physical?.height) completeness++;
+  if (candidate.education?.trade) completeness++;
+  if (candidate.family?.fatherName) completeness++;
+  if (candidate.images?.length > 0) completeness++;
+  score += completeness;
+
+  return Math.min(100, score);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GET /api/search — Scored Matchmaking Search
 // ═══════════════════════════════════════════════════════════════════
 
 export const executeSearch = async (req: Request, res: Response) => {
   try {
-    const { gender, maritalStatus, casteId, q, ageMin, ageMax, height, trade, occupation, location, diet, cursor, limit = '20' } = req.query;
+    const {
+      gender, maritalStatus, casteId, q,
+      ageMin, ageMax, height, trade, occupation,
+      location, diet, cursor, limit = '20'
+    } = req.query;
 
     const profileFilters: Prisma.UserProfileWhereInput = {};
 
@@ -41,14 +144,12 @@ export const executeSearch = async (req: Request, res: Response) => {
       conditions.push({ id: { not: req.user.id } });
     }
 
-    // Profile Filters - Merging them into the AND stack
+    // Profile Filters
     if (Object.keys(profileFilters).length > 0) {
       conditions.push({ profile: { is: profileFilters } });
     } else {
-      // Ensure we only show users who have at least a basic profile
       conditions.push({ profile: { isNot: null } });
     }
-
 
     // Physical Filters
     if (height || diet) {
@@ -82,7 +183,7 @@ export const executeSearch = async (req: Request, res: Response) => {
        });
     }
 
-    // Keyword Search (q) - Applied as an OR within the filtered results
+    // Keyword Search (q)
     if (q) {
       const qStr = String(q);
       conditions.push({
@@ -95,12 +196,9 @@ export const executeSearch = async (req: Request, res: Response) => {
     }
 
     const baseWhere: Prisma.UserWhereInput = { AND: conditions };
+    const pageSize = Math.min(parseInt(String(limit)) || 20, 50); // Cap at 50
 
-    const pageSize = parseInt(String(limit)) || 20;
-
-    // ── Cursor + Overfetch Strategy ──────────────────────────────
-    // Fetch limit+1 to detect hasMore without COUNT(*) — eliminates
-    // the full-table sequential scan bottleneck entirely.
+    // ── Fetch candidates with enriched data for scoring ──────────
     const matches = await prisma.user.findMany({
       where: baseWhere,
       include: {
@@ -110,49 +208,98 @@ export const executeSearch = async (req: Request, res: Response) => {
           take: 1
         },
         education: true,
-        physical: true
+        physical: true,
+        family: { select: { fatherName: true } },
+        astrology: { select: { nadi: true, rashi: true } },
+        addresses: { take: 1 },
       },
       orderBy: [
-        { planType: 'desc' }, // GOLD > SILVER > FREE
+        { planType: 'desc' },
         { createdAt: 'desc' },
-        { id: 'asc' } // Deterministic tie-breaker for cursor
+        { id: 'asc' }
       ],
-      take: pageSize + 1, // Overfetch by 1 to detect hasMore
+      take: pageSize + 1,
       cursor: cursor ? { id: String(cursor) } : undefined,
       skip: cursor ? 1 : 0,
     });
 
-    // Determine hasMore from overfetch
+    // ── Build scoring context from the querier's own profile ─────
+    let scoringCtx: ScoringContext = {};
+
+    if (req.user?.id) {
+      const querierData = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          profile: { select: { gender: true, casteId: true } },
+          physical: { select: { diet: true } },
+          education: { select: { trade: true } },
+          astrology: { select: { nadi: true, rashi: true } },
+          addresses: { take: 1, select: { city: true, district: true, state: true } },
+          preferences: { select: { expectations: true } },
+        }
+      });
+
+      if (querierData) {
+        scoringCtx = {
+          querierGender: querierData.profile?.gender ?? undefined,
+          querierCasteId: querierData.profile?.casteId,
+          querierDiet: querierData.physical?.diet,
+          querierCity: querierData.addresses?.[0]?.city,
+          querierDistrict: querierData.addresses?.[0]?.district,
+          querierState: querierData.addresses?.[0]?.state,
+          querierTrade: querierData.education?.trade,
+          querierNadi: querierData.astrology?.nadi,
+          querierExpectations: querierData.preferences?.expectations,
+        };
+      }
+    }
+
+    // ── Determine pagination ─────────────────────────────────────
     const hasMore = matches.length > pageSize;
     const pageResults = hasMore ? matches.slice(0, pageSize) : matches;
 
-    const safeMatches = pageResults.map(user => {
+    // ── Score and sort ───────────────────────────────────────────
+    const scoredResults = pageResults.map(user => {
+      const matchScore = req.user?.id
+        ? computeMatchScore(user as any, scoringCtx)
+        : PLAN_WEIGHT[user.planType] ?? 0;
+
+      return { user, matchScore };
+    });
+
+    // Sort by matchScore descending (stable sort preserves plan+date ordering for ties)
+    scoredResults.sort((a, b) => b.matchScore - a.matchScore);
+
+    // ── Sanitize output ──────────────────────────────────────────
+    const safeMatches = scoredResults.map(({ user, matchScore }) => {
       const sameUser = user.id === req.user?.id;
       const safeQuery = maskPrivateDetails(user as any, sameUser) as Record<string, any>;
-      
+
       // Guest users only see surname
       if (!req.user && safeQuery.profile) {
         safeQuery.profile.firstName = '***';
       }
 
+      // Attach match score for authenticated users
+      if (req.user?.id) {
+        safeQuery.matchScore = matchScore;
+      }
+
+      // Strip scoring-only fields from response
+      delete safeQuery.family;
+      delete safeQuery.astrology;
+      delete safeQuery.addresses;
+
       return safeQuery;
     });
 
-    const lastMatch = safeMatches[safeMatches.length - 1];
+    const lastMatch = pageResults[pageResults.length - 1];
     const nextCursor = hasMore ? lastMatch?.id ?? null : null;
 
-    const pagination = {
-      nextCursor,
-      hasMore,
-      pageSize,
-    };
-
-    const responseBody = {
+    res.status(200).json({
       results: safeMatches,
-      pagination,
-    };
-
-    res.status(200).json(responseBody);
+      pagination: { nextCursor, hasMore, pageSize },
+    });
 
   } catch (error) {
     console.error("Matchmaking Error:", error);
