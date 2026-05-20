@@ -7,6 +7,10 @@ import crypto from 'crypto';
 //  stored in PostgreSQL. Uses AES-256-GCM for authenticated
 //  encryption, preventing both eavesdropping and tampering.
 //
+//  Supports both standard non-deterministic random IV encryption
+//  and deterministic encryption derived from the trimmed, lowercase
+//  plaintext to enable exact-match queries and database unique constraints.
+//
 //  Requires env: PII_ENCRYPTION_KEY (64-char hex = 32-byte key)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -30,12 +34,20 @@ function getEncryptionKey(): Buffer {
  * Returns a single base64 string containing: IV + AuthTag + Ciphertext
  * 
  * Format: base64(IV[16] || AuthTag[16] || Ciphertext[...])
+ * 
+ * If options.deterministic is true, derives the IV from the trimmed,
+ * lowercase plaintext itself using a key-derived HMAC key.
  */
-export function encryptPII(plaintext: string): string {
+export function encryptPII(plaintext: string, options?: { deterministic?: boolean }): string {
   if (!plaintext) return plaintext;
 
   const key = getEncryptionKey();
-  const iv = crypto.randomBytes(IV_LENGTH);
+  
+  // Deriving deterministic IV from the plaintext itself for searchable fields
+  const iv = options?.deterministic
+    ? crypto.createHmac('sha256', key).update(plaintext.trim().toLowerCase()).digest().subarray(0, IV_LENGTH)
+    : crypto.randomBytes(IV_LENGTH);
+
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
   const encrypted = Buffer.concat([

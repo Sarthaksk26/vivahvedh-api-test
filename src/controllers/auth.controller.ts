@@ -17,6 +17,19 @@ import type { AccessTokenPayload, LoginResponse } from '../types';
 
 const PROFILE_CREATED_BY_OPTIONS = ['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau'] as const;
 
+// Global in-memory grace cache for rotated tokens to support multi-tab refresh concurrency
+const rotatedTokensGrace = new Map<string, { userId: string; rotatedAt: number }>();
+
+// Periodic cleanup of expired entries (longer than 60 seconds)
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, value] of rotatedTokensGrace.entries()) {
+    if (now - value.rotatedAt > 60000) {
+      rotatedTokensGrace.delete(token);
+    }
+  }
+}, 60000).unref();
+
 // Zod Schema for strict validation
 const registerSchema = z.object({
   mobile: z.string().min(10).max(15).regex(/^[0-9]+$/, 'Mobile must contain only digits'),
@@ -239,9 +252,27 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Verify token exists in DB (not revoked)
-  const storedToken = await prisma.refreshToken.findUnique({
+  let storedToken = await prisma.refreshToken.findUnique({
     where: { token: refreshCookie },
   });
+
+  let isGracePeriod = false;
+
+  if (!storedToken) {
+    // Check if it exists in our rotated tokens grace map
+    const graceRecord = rotatedTokensGrace.get(refreshCookie);
+    if (graceRecord && graceRecord.userId === decoded.id && (Date.now() - graceRecord.rotatedAt < 30000)) {
+      isGracePeriod = true;
+      // Synthesize a storedToken representation for the rest of the controller logic
+      storedToken = {
+        id: 'grace-synthesized',
+        token: refreshCookie,
+        userId: decoded.id,
+        expiresAt: new Date(Date.now() + 1000 * 60), // Not expired
+        createdAt: new Date()
+      } as any;
+    }
+  }
 
   if (!storedToken || storedToken.userId !== decoded.id) {
     // Token reuse detected or invalid — revoke all user tokens
@@ -294,8 +325,14 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
-  // Rotate: delete old token
-  await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+  // Rotate: delete old token if it was in the DB, and save to grace period cache
+  if (!isGracePeriod) {
+    await prisma.refreshToken.delete({ where: { id: storedToken.id } });
+    rotatedTokensGrace.set(refreshCookie, {
+      userId: decoded.id,
+      rotatedAt: Date.now()
+    });
+  }
 
   // Issue new dual tokens
   const tokenPayload: AccessTokenPayload = {

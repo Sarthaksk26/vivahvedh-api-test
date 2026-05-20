@@ -274,6 +274,24 @@ export const requestContact = asyncHandler(async (req: Request, res: Response) =
 
   if (!targetUser) throw new AppError('Target user not found.', 404);
 
+  // Verify mutual ACCEPTED match exists
+  const mutualConnection = await prisma.request.findFirst({
+    where: {
+      OR: [
+        { senderId: currentUserId, receiverId: targetUserId, status: 'ACCEPTED' },
+        { senderId: targetUserId, receiverId: currentUserId, status: 'ACCEPTED' }
+      ]
+    }
+  });
+
+  if (!mutualConnection) {
+    res.status(403).json({
+      error: "You can only request contact details of members with whom you have an ACCEPTED match.",
+      code: "MUTUAL_CONNECTION_REQUIRED"
+    });
+    return;
+  }
+
   const targetName = targetUser.profile ? `${targetUser.profile.firstName} ${targetUser.profile.lastName}` : 'Member';
   const targetContactInfo = {
     mobile: targetUser.mobile,

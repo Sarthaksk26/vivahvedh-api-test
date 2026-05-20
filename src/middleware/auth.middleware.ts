@@ -141,7 +141,22 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
   if (!req.user) return next();
 
   try {
-    // Current state is already fetched in requireAuth for security, but we double check status logic here
+    const prisma = (await import('../config/db')).default;
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { accountStatus: true, planType: true, planExpiresAt: true }
+    });
+
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized. User session no longer exists.' });
+      return;
+    }
+
+    // Sync context with live, real-time values from DB
+    req.user.accountStatus = user.accountStatus;
+    req.user.planType = user.planType;
+    req.user.planExpiresAt = user.planExpiresAt;
+
     if (req.user.accountStatus === 'SUSPENDED' || req.user.accountStatus === 'DELETED') {
       res.status(403).json({ 
         error: 'Your account has been suspended or deleted. Please contact support.',
@@ -155,7 +170,6 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
       const now = new Date();
       const expiresAt = new Date(req.user.planExpiresAt);
       if (now > expiresAt) {
-        const prisma = (await import('../config/db')).default;
         await prisma.user.update({
           where: { id: req.user.id },
           data: { planType: 'FREE', planExpiresAt: null }
