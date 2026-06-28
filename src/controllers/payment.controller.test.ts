@@ -53,6 +53,7 @@ describe('updatePaymentStatus', () => {
       id: 'pay-2',
       userId: 'user-2',
       planType: 'SILVER',
+      amount: 2000, // SILVER plan expected amount
       status: 'PENDING',
       user: { email: 'b@example.com', profile: { firstName: 'B' } }
     });

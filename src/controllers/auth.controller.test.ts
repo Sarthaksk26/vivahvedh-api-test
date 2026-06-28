@@ -17,12 +17,16 @@ const mockRes = () => {
 };
 
 describe('login', () => {
-  it('returns 400 when required credentials are missing', async () => {
+  it('calls next with a ZodError when required credentials are missing', async () => {
     const req: any = { body: { identifier: '', password: '' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await login(req, res as any, vi.fn());
+    await login(req, res as any, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    // Zod validation errors are passed to next() by asyncHandler,
+    // not directly written to res — the error middleware handles the 400 response.
+    expect(next).toHaveBeenCalledOnce();
+    expect(next.mock.calls[0][0]).toBeInstanceOf(Error);
   });
 });

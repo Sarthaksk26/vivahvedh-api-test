@@ -56,29 +56,36 @@ export const setAuthCookies = (
   accessToken: string,
   refreshToken: string
 ): void => {
+  const isProd = isProduction();
+  const cookieBase = {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    ...(isProd ? { partitioned: true } : {}),
+    path: '/',
+  };
+
   // Access token cookie — short-lived (15 minutes)
   res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    partitioned: true, // Enable CHIPS for cross-site support
+    ...cookieBase,
     maxAge: 15 * 60 * 1000,
-    path: '/',
   });
 
   // Refresh token cookie — long-lived (7 days)
   res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    partitioned: true,
+    ...cookieBase,
     maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/',
   });
 };
 
 export const clearAuthCookies = (res: Response): void => {
-  const opts = { path: '/', secure: true, sameSite: 'none' as const, partitioned: true };
+  const isProd = isProduction();
+  const opts = {
+    path: '/',
+    secure: isProd,
+    sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+    ...(isProd ? { partitioned: true } : {}),
+  };
   res.clearCookie(ACCESS_TOKEN_COOKIE, opts);
   res.clearCookie(REFRESH_TOKEN_COOKIE, opts);
 };
