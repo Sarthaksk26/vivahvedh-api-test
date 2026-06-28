@@ -27,7 +27,7 @@ export const verifyPayment = asyncHandler(async (req: Request, res: Response) =>
   }
 
   const existingPayment = await prisma.pendingPayment.findFirst({
-    where: { userId, transactionId },
+    where: { transactionId },
   });
 
   if (existingPayment) {
@@ -49,14 +49,14 @@ export const verifyPayment = asyncHandler(async (req: Request, res: Response) =>
     }
   });
 
-  const { sendAdminNotification } = await import('../services/mail.service');
+  const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
   sendAdminNotification(
     'New Payment Submitted',
     `<p>A new payment proof has been submitted for verification.</p>
-     <p><b>Member ID:</b> ${pendingPayment.user.regId}</p>
-     <p><b>Plan:</b> ${planType}</p>
-     <p><b>Amount:</b> ₹${amount}</p>
-     <p><b>TXN ID:</b> ${transactionId}</p>`
+     <p><b>Member ID:</b> ${escapeHTML(pendingPayment.user.regId)}</p>
+     <p><b>Plan:</b> ${escapeHTML(planType)}</p>
+     <p><b>Amount:</b> ₹${escapeHTML(amount.toString())}</p>
+     <p><b>TXN ID:</b> ${escapeHTML(transactionId)}</p>`
   ).catch((err: Error) => console.error('[Mail] Admin payment notification failed:', err.message));
 
   res.status(201).json({
@@ -100,6 +100,14 @@ export const updatePaymentStatus = asyncHandler(async (req: Request, res: Respon
   if (payment.status !== 'PENDING') {
     res.status(409).json({ error: `Payment is already ${payment.status.toLowerCase()}.` });
     return;
+  }
+
+  if (status === 'APPROVED') {
+    const expectedAmount = payment.planType === 'GOLD' ? 5000 : 2000;
+    if (payment.amount !== expectedAmount) {
+      res.status(400).json({ error: 'Amount mismatch. Manual review required.' });
+      return;
+    }
   }
 
   await prisma.$transaction(async (tx) => {

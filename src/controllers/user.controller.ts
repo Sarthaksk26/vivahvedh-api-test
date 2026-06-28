@@ -176,6 +176,10 @@ export const uploadPhoto = asyncHandler(async (req: Request, res: Response) => {
 
   const existingCount = await prisma.image.count({ where: { userId } });
 
+  if (existingCount >= 5) {
+    throw new AppError('You can upload a maximum of 5 photos.', 400);
+  }
+
   await prisma.image.create({
     data: {
       userId,
@@ -371,7 +375,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required.'),
   newPassword: z.string()
-    .min(6, 'New password must be at least 6 characters.')
+    .min(8, 'New password must be at least 8 characters.')
     .max(100, 'Password too long.'),
 });
 

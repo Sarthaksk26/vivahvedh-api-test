@@ -81,11 +81,11 @@ export const sendInterest = asyncHandler(async (req: Request, res: Response) => 
       `${senderData.profile?.firstName} ${senderData.profile?.lastName}`
     ).catch((err: Error) => console.error('[Mail] Interest email failed:', err.message));
 
-    const { sendAdminNotification } = await import('../services/mail.service');
+    const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
     sendAdminNotification(
       'New Match Proposal Sent',
-      `<p><b>Sender:</b> ${senderData.profile?.firstName} ${senderData.profile?.lastName} (${senderData.regId})</p>
-       <p><b>Receiver:</b> ${receiverData.profile?.firstName} ${receiverData.profile?.lastName} (${receiverData.regId})</p>`
+      `<p><b>Sender:</b> ${escapeHTML(senderData.profile?.firstName || '')} ${escapeHTML(senderData.profile?.lastName || '')} (${escapeHTML(senderData.regId)})</p>
+       <p><b>Receiver:</b> ${escapeHTML(receiverData.profile?.firstName || '')} ${escapeHTML(receiverData.profile?.lastName || '')} (${escapeHTML(receiverData.regId)})</p>`
     ).catch((err: Error) => console.error('[Mail] Admin interest notification failed:', err.message));
   }
 
@@ -132,11 +132,11 @@ export const acceptInterest = asyncHandler(async (req: Request, res: Response) =
       `${receiverData.profile?.firstName} ${receiverData.profile?.lastName}`
     ).catch((err: Error) => console.error('[Mail] Accept email failed:', err.message));
 
-    const { sendAdminNotification } = await import('../services/mail.service');
+    const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
     sendAdminNotification(
       'Match Proposal Accepted',
-      `<p><b>Accepter:</b> ${receiverData.profile?.firstName} ${receiverData.profile?.lastName} (${receiverData.regId})</p>
-       <p><b>Original Sender:</b> ${senderData.profile?.firstName} ${senderData.profile?.lastName} (${senderData.regId})</p>`
+      `<p><b>Accepter:</b> ${escapeHTML(receiverData.profile?.firstName || '')} ${escapeHTML(receiverData.profile?.lastName || '')} (${escapeHTML(receiverData.regId)})</p>
+       <p><b>Original Sender:</b> ${escapeHTML(senderData.profile?.firstName || '')} ${escapeHTML(senderData.profile?.lastName || '')} (${escapeHTML(senderData.regId)})</p>`
     ).catch((err: Error) => console.error('[Mail] Admin accept notification failed:', err.message));
   }
 
@@ -160,10 +160,10 @@ export const rejectInterest = asyncHandler(async (req: Request, res: Response) =
   }
 
   if (request) {
-    const { sendAdminNotification } = await import('../services/mail.service');
+    const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
     sendAdminNotification(
       'Match Proposal Declined',
-      `<p>Connection ID: ${requestId} was declined by the receiver.</p>`
+      `<p>Connection ID: ${escapeHTML(requestId)} was declined by the receiver.</p>`
     ).catch(() => {});
   }
 

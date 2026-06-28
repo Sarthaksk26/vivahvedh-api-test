@@ -28,7 +28,7 @@ export const submitStory = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = submitStorySchema.parse(req.body);
   const userId = req.user?.id;
 
-  const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+  const photoUrl = req.file ? req.file.path : null;
 
   const story = await prisma.successStory.create({
     data: {
@@ -41,11 +41,11 @@ export const submitStory = asyncHandler(async (req: Request, res: Response) => {
     }
   });
 
-  const { sendAdminNotification } = await import('../services/mail.service');
+  const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
   sendAdminNotification(
     'New Success Story Submitted',
     `<p>A new success story has been submitted by a user and is awaiting review.</p>
-     <p><b>Couple:</b> ${validatedData.groomName} & ${validatedData.brideName}</p>`
+     <p><b>Couple:</b> ${escapeHTML(validatedData.groomName)} & ${escapeHTML(validatedData.brideName)}</p>`
   ).catch((err: Error) => console.error('[Mail] Admin story notification failed:', err.message));
 
   res.status(201).json({

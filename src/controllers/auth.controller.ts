@@ -145,13 +145,13 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   // Notify Admin of new registration
   try {
-    const { sendAdminNotification } = await import('../services/mail.service');
+    const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
     await sendAdminNotification(
       'New User Registered',
-      `<p><b>Name:</b> ${validatedData.firstName} ${validatedData.lastName}</p>
-       <p><b>RegID:</b> ${newRegId}</p>
-       <p><b>Email:</b> ${emailLower}</p>
-       <p><b>Mobile:</b> ${validatedData.mobile}</p>
+      `<p><b>Name:</b> ${escapeHTML(validatedData.firstName)} ${escapeHTML(validatedData.lastName)}</p>
+       <p><b>RegID:</b> ${escapeHTML(newRegId)}</p>
+       <p><b>Email:</b> ${escapeHTML(emailLower)}</p>
+       <p><b>Mobile:</b> ${escapeHTML(validatedData.mobile)}</p>
        <p>Please review and approve this profile in the admin panel.</p>`
     );
   } catch (e: any) {
