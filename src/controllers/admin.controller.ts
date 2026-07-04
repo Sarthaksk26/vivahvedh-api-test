@@ -59,13 +59,29 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
     ];
   }
 
-  const allUsers = await prisma.user.findMany({
-    where: baseWhere,
-    include: { profile: true, images: { orderBy: { isPrimary: 'desc' } } },
-    orderBy: { createdAt: 'desc' },
-    take: 100
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
+  const limit = Math.max(1, parseInt(String(req.query.limit || '50'), 10));
+  const skip = (page - 1) * limit;
+
+  const [allUsers, total] = await prisma.$transaction([
+    prisma.user.findMany({
+      where: baseWhere,
+      include: { profile: true, images: { orderBy: { isPrimary: 'desc' } } },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.user.count({ where: baseWhere }),
+  ]);
+
+  res.status(200).json({
+    users: allUsers,
+    pagination: {
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    },
   });
-  res.status(200).json(allUsers);
 });
 
 export const approveUser = asyncHandler(async (req: Request, res: Response) => {

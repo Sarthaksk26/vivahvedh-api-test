@@ -1,42 +1,19 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import sharp from 'sharp';
 import { Request, Response, NextFunction } from 'express';
 import { StorageService } from '../services/storage.service';
 
-// ── Directory setup ─────────────────────────────────────────────────
-const isVercel = process.env.VERCEL === '1';
-const UPLOAD_DIR = isVercel 
-  ? path.join('/tmp', 'uploads') 
-  : path.join(process.cwd(), 'uploads');
-const DOCS_DIR = path.join(UPLOAD_DIR, 'docs');
-
-for (const dir of [UPLOAD_DIR, DOCS_DIR]) {
-  if (!fs.existsSync(dir)) {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-    } catch (error) {
-      console.warn(`[Multer Config] Could not create directory ${dir}:`, error);
-    }
-  }
-}
+/**
+ * Storage strategy: in-memory only.
+ * Buffers are handed directly to StorageService, which streams them to
+ * Cloudinary. Nothing is written to disk (serverless-safe). See
+ * storage.service.ts for the strict Cloudinary enforcement.
+ */
 
 // ── Shared constants ────────────────────────────────────────────────
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const DOCUMENT_MIME_TYPES = ['application/pdf'] as const;
 
-/** 
- * Bulletproof filename sanitization. 
- * Strips directory traversal characters and replaces non-alphanumeric with dashes.
- */
-const sanitizeFilename = (raw: string): string => {
-  const ext = path.extname(raw).toLowerCase();
-  const base = path.basename(raw, ext).replace(/[^a-z0-9]/gi, '-').toLowerCase();
-  return `${base}-${Date.now()}${ext}`;
-};
-
-// ── Image upload (memory storage → sharp processing) ────────────────
+// ── Image upload (memory storage → Cloudinary via StorageService) ───
 const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (IMAGE_MIME_TYPES.includes(file.mimetype as any)) {
     cb(null, true);
@@ -48,15 +25,15 @@ const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multe
 export const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: imageFilter,
-  limits: { 
+  limits: {
     fileSize: 5 * 1024 * 1024, // 5 MB
     files: 1, // Only 1 file per request
   },
 });
 
 /**
- * Middleware: process an in-memory image buffer,
- * then persist to disk OR cloud storage via StorageService.
+ * Middleware: take the in-memory image buffer and stream it to
+ * Cloudinary via StorageService. No disk I/O.
  */
 export const processImage = async (req: Request, _res: Response, next: NextFunction) => {
   if (!req.file) return next();
@@ -65,7 +42,6 @@ export const processImage = async (req: Request, _res: Response, next: NextFunct
     const userId = (req as any).user?.id || 'anon';
     const filename = `img-${userId}-${Date.now()}-${Math.round(Math.random() * 1e4)}.webp`;
 
-    // sharp will handle buffer sanitization/conversion
     const url = await StorageService.uploadImage(req.file.buffer, filename);
 
     req.file.path = url;
@@ -78,7 +54,7 @@ export const processImage = async (req: Request, _res: Response, next: NextFunct
   }
 };
 
-// ── Document upload (disk storage, no sharp) ────────────────────────
+// ── Document upload (memory storage → Cloudinary via StorageService) ──
 const documentFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (DOCUMENT_MIME_TYPES.includes(file.mimetype as any)) {
     cb(null, true);
@@ -90,7 +66,7 @@ const documentFilter = (_req: Express.Request, file: Express.Multer.File, cb: mu
 export const uploadDocument = multer({
   storage: multer.memoryStorage(),
   fileFilter: documentFilter,
-  limits: { 
+  limits: {
     fileSize: 10 * 1024 * 1024, // 10 MB (reduced from 20)
     files: 1,
   },

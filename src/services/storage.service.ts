@@ -1,132 +1,112 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import path from 'path';
-import fs from 'fs';
-import sharp from 'sharp';
 
-// ── Local Storage Setup ─────────────────────────────────────────────
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+// ── Cloudinary Setup (strict, no local fallback) ────────────────────
+// In serverless environments (Vercel/Render) the local filesystem is
+// ephemeral and wiped on every cold start, so local-disk storage would
+// silently lose uploaded files. Cloudinary is therefore mandatory.
+const REQUIRED_CLOUDINARY_VARS = [
+  'CLOUDINARY_CLOUD_NAME',
+  'CLOUDINARY_API_KEY',
+  'CLOUDINARY_API_SECRET',
+] as const;
 
-// ── Cloudinary Setup ────────────────────────────────────────────────
-const useCloudinary = !!(
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
+const missingCloudinaryVars = REQUIRED_CLOUDINARY_VARS.filter(
+  (key) => !process.env[key]
 );
 
-if (useCloudinary) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
+if (missingCloudinaryVars.length > 0) {
+  // Fail fast at module load — never fall back to local disk silently.
+  throw new Error(
+    `[StorageService] FATAL: Cloudinary is required but the following environment ` +
+      `variables are missing: ${missingCloudinaryVars.join(', ')}. ` +
+      `Set them and restart the server. Local-disk storage is disabled because ` +
+      `it does not persist across cold starts in serverless deployments.`
+  );
 }
 
-export const cloudinaryStorage = useCloudinary
-  ? new CloudinaryStorage({
-      cloudinary: cloudinary,
-      params: {
-        folder: 'vivahvedh/profiles',
-        format: async () => 'webp',
-        public_id: (_req: any, _file: any) => {
-          const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-          return `img-${uniqueSuffix}`;
-        },
-      } as any,
-    })
-  : null;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 /**
- * Storage Service to handle both Local and Cloud storage
+ * Storage Service — Cloudinary only.
+ * Buffers are streamed directly to Cloudinary; nothing is written to disk.
  */
 export class StorageService {
   /**
-   * Uploads a buffer to the configured storage (Cloudinary or Local)
+   * Uploads an image buffer to Cloudinary.
    * @param buffer Image buffer
-   * @param filename Desired filename (for local storage)
-   * @returns URL of the uploaded image
+   * @param filename Desired filename (used for logging/debug only)
+   * @returns Secure URL of the uploaded image
    */
   static async uploadImage(buffer: Buffer, filename: string): Promise<string> {
-    if (useCloudinary) {
-      return new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: 'vivahvedh/profiles',
-            format: 'webp',
-            transformation: [{ width: 1200, crop: 'limit', quality: 80 }],
-          },
-          (error: any, result: any) => {
-            if (error) return reject(error);
-            resolve(result!.secure_url);
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'vivahvedh/profiles',
+          format: 'webp',
+          transformation: [{ width: 1200, crop: 'limit', quality: 80 }],
+        },
+        (error: any, result: any) => {
+          if (error) {
+            return reject(
+              new Error(
+                `[StorageService] uploadImage failed for "${filename}": ${error.message}`
+              )
+            );
           }
-        );
-        uploadStream.end(buffer);
-      });
-    } else {
-      const outputPath = path.join(UPLOAD_DIR, filename);
-      await sharp(buffer)
-        .resize({ width: 1200, withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toFile(outputPath);
-      
-      // Return a relative URL that the express app can serve
-      return `/uploads/${filename}`;
-    }
+          resolve(result!.secure_url);
+        }
+      );
+      uploadStream.end(buffer);
+    });
   }
 
   /**
-   * Uploads a document buffer to storage (Cloudinary as raw, or Local)
+   * Uploads a document buffer to Cloudinary as a raw resource.
    * @param buffer Document buffer
    * @param filename Desired filename
-   * @returns URL of the uploaded document
+   * @returns Secure URL of the uploaded document
    */
   static async uploadDocument(buffer: Buffer, filename: string): Promise<string> {
-    if (useCloudinary) {
-      return new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-          {
-            folder: 'vivahvedh/documents',
-            resource_type: 'raw',
-          },
-          (error: any, result: any) => {
-            if (error) return reject(error);
-            resolve(result!.secure_url);
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'vivahvedh/documents',
+          resource_type: 'raw',
+        },
+        (error: any, result: any) => {
+          if (error) {
+            return reject(
+              new Error(
+                `[StorageService] uploadDocument failed for "${filename}": ${error.message}`
+              )
+            );
           }
-        );
-        uploadStream.end(buffer);
-      });
-    } else {
-      const DOCS_DIR = path.join(UPLOAD_DIR, 'docs');
-      if (!fs.existsSync(DOCS_DIR)) {
-        fs.mkdirSync(DOCS_DIR, { recursive: true });
-      }
-      const outputPath = path.join(DOCS_DIR, filename);
-      await fs.promises.writeFile(outputPath, buffer);
-      return `/uploads/docs/${filename}`;
-    }
+          resolve(result!.secure_url);
+        }
+      );
+      uploadStream.end(buffer);
+    });
   }
 
   /**
-   * Deletes an image from storage
-   * @param url URL or filename of the image
+   * Deletes an image from Cloudinary.
+   * @param url Secure URL or public_id of the image
    */
   static async deleteImage(url: string): Promise<void> {
-    if (useCloudinary && url.includes('cloudinary.com')) {
-      // Extract public_id from URL
-      const parts = url.split('/');
-      const filename = parts[parts.length - 1].split('.')[0];
-      const folder = parts[parts.length - 2];
-      const publicId = `vivahvedh/${folder}/${filename}`;
-      await cloudinary.uploader.destroy(publicId);
-    } else {
-      const filename = path.basename(url);
-      const filePath = path.join(UPLOAD_DIR, filename);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+    // Only initiate deletion for actual Cloudinary URLs; ignore other values
+    // (e.g. legacy relative paths) rather than crashing.
+    if (!url || !url.includes('cloudinary.com')) {
+      return;
     }
+    // Extract public_id from URL
+    const parts = url.split('/');
+    const filename = parts[parts.length - 1].split('.')[0];
+    const folder = parts[parts.length - 2];
+    const publicId = `vivahvedh/${folder}/${filename}`;
+    await cloudinary.uploader.destroy(publicId);
   }
 }

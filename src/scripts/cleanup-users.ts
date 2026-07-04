@@ -8,7 +8,11 @@ async function main() {
 
   // 1. Reset Admin Password
   const adminId = "f13b584b-744d-428c-aece-296feda5b3e4";
-  const newPassword = "Admin@2026";
+  const newPassword = process.env.ADMIN_PASSWORD;
+  if (!newPassword || newPassword.length < 6) {
+    console.error('Error: set the ADMIN_PASSWORD env var (>= 6 chars) instead of hardcoding. Usage: ADMIN_PASSWORD=xxxx tsx src/scripts/cleanup-users.ts');
+    process.exit(1);
+  }
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
   await prisma.user.update({
