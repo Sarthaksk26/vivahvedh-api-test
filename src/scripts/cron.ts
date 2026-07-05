@@ -162,14 +162,31 @@ async function cleanupOrphanedFiles(): Promise<CleanupStats> {
   return stats;
 }
 
-// ── Expired Refresh Token Cleanup ─────────────────────────────────
-async function cleanupExpiredTokens(): Promise<number> {
-  console.log('\n[Bonus] Cleaning up expired refresh tokens...');
-  const result = await prisma.refreshToken.deleteMany({
+// ── Expired Tokens Cleanup ────────────────────────────────────────
+async function cleanupExpiredTokens(): Promise<{ refresh: number, grace: number, reset: number }> {
+  console.log('\n[Bonus] Cleaning up expired tokens...');
+  
+  const refreshResult = await prisma.refreshToken.deleteMany({
     where: { expiresAt: { lt: new Date() } }
   });
-  console.log(`      Deleted ${result.count} expired tokens.`);
-  return result.count;
+  
+  const graceResult = await prisma.refreshTokenGrace.deleteMany({
+    where: { expiresAt: { lt: new Date() } }
+  });
+
+  const resetResult = await prisma.passwordResetToken.deleteMany({
+    where: { expiresAt: { lt: new Date() } }
+  });
+  
+  console.log(`      Deleted ${refreshResult.count} expired refresh tokens.`);
+  console.log(`      Deleted ${graceResult.count} expired grace tokens.`);
+  console.log(`      Deleted ${resetResult.count} expired password reset tokens.`);
+  
+  return {
+    refresh: refreshResult.count,
+    grace: graceResult.count,
+    reset: resetResult.count
+  };
 }
 
 // ── Main Execution ────────────────────────────────────────────────
@@ -184,7 +201,9 @@ async function main() {
     console.log(`  Files scanned:      ${stats.totalFilesScanned}`);
     console.log(`  Orphans deleted:    ${stats.orphanedFilesDeleted}`);
     console.log(`  Space reclaimed:    ${(stats.bytesReclaimed / 1024 / 1024).toFixed(2)} MB`);
-    console.log(`  Expired tokens:     ${expiredTokens}`);
+    console.log(`  Expired refresh:    ${expiredTokens.refresh}`);
+    console.log(`  Expired grace:      ${expiredTokens.grace}`);
+    console.log(`  Expired reset:      ${expiredTokens.reset}`);
     
     if (stats.errors.length > 0) {
       console.log(`  Errors:             ${stats.errors.length}`);

@@ -422,3 +422,13 @@ model PasswordResetToken {
   @@index([userId])
   @@index([expiresAt])
 }
+
+model RefreshTokenGrace {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}

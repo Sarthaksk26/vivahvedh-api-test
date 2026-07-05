@@ -18,18 +18,7 @@ import type { AccessTokenPayload, LoginResponse } from '../types';
 
 const PROFILE_CREATED_BY_OPTIONS = ['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau'] as const;
 
-// Global in-memory grace cache for rotated tokens to support multi-tab refresh concurrency
-const rotatedTokensGrace = new Map<string, { userId: string; rotatedAt: number }>();
-
-// Periodic cleanup of expired entries (longer than 60 seconds)
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, value] of rotatedTokensGrace.entries()) {
-    if (now - value.rotatedAt > 60000) {
-      rotatedTokensGrace.delete(token);
-    }
-  }
-}, 60000).unref();
+// Global in-memory grace cache removed - now using Postgres (RefreshTokenGrace) for serverless compatibility.
 
 // Zod Schema for strict validation
 const registerSchema = z.object({
@@ -253,9 +242,12 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   let isGracePeriod = false;
 
   if (!storedToken) {
-    // Check if it exists in our rotated tokens grace map
-    const graceRecord = rotatedTokensGrace.get(refreshCookie);
-    if (graceRecord && graceRecord.userId === decoded.id && (Date.now() - graceRecord.rotatedAt < 30000)) {
+    // Check if it exists in our rotated tokens grace DB table
+    const graceRecord = await prisma.refreshTokenGrace.findUnique({
+      where: { token: refreshCookie },
+    });
+    
+    if (graceRecord && graceRecord.userId === decoded.id && new Date() < graceRecord.expiresAt) {
       isGracePeriod = true;
       // Synthesize a storedToken representation for the rest of the controller logic
       storedToken = {
@@ -322,9 +314,12 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   // Rotate: delete old token if it was in the DB, and save to grace period cache
   if (!isGracePeriod) {
     await prisma.refreshToken.delete({ where: { id: storedToken.id } });
-    rotatedTokensGrace.set(refreshCookie, {
-      userId: decoded.id,
-      rotatedAt: Date.now()
+    await prisma.refreshTokenGrace.create({
+      data: {
+        token: refreshCookie,
+        userId: decoded.id,
+        expiresAt: new Date(Date.now() + 30000), // 30 sec grace period
+      }
     });
   }
 
