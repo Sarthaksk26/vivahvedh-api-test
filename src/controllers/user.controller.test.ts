@@ -41,9 +41,12 @@ describe('User Controller - shortlistProfile', () => {
   it('throws an error if user tries to shortlist themselves', async () => {
     const req: any = { user: { id: 'u-1' }, body: { targetUserId: 'u-1' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await expect(shortlistProfile(req, res)).rejects.toThrow(AppError);
-    await expect(shortlistProfile(req, res)).rejects.toThrow('Cannot shortlist yourself.');
+    await shortlistProfile(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.any(AppError));
+    expect(next.mock.calls[0][0].message).toBe('Cannot shortlist yourself.');
   });
 
   it('removes the shortlist if it already exists', async () => {
@@ -52,8 +55,9 @@ describe('User Controller - shortlistProfile', () => {
     
     const req: any = { user: { id: 'u-1' }, body: { targetUserId: 'u-2' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await shortlistProfile(req, res);
+    await shortlistProfile(req, res, next);
 
     expect(prismaMock.shortlist.delete).toHaveBeenCalledWith({ where: { id: 's-1' } });
     expect(res.status).toHaveBeenCalledWith(200);
@@ -66,8 +70,9 @@ describe('User Controller - shortlistProfile', () => {
     
     const req: any = { user: { id: 'u-1' }, body: { targetUserId: 'u-2' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await shortlistProfile(req, res);
+    await shortlistProfile(req, res, next);
 
     expect(prismaMock.shortlist.create).toHaveBeenCalledWith({ data: { userId: 'u-1', targetUserId: 'u-2' } });
     expect(res.status).toHaveBeenCalledWith(200);
@@ -83,8 +88,9 @@ describe('User Controller - recordProfileView', () => {
   it('returns early and does not record if user views their own profile', async () => {
     const req: any = { user: { id: 'u-1' }, params: { profileId: 'u-1' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await recordProfileView(req, res);
+    await recordProfileView(req, res, next);
 
     expect(prismaMock.profileView.upsert).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
@@ -94,8 +100,9 @@ describe('User Controller - recordProfileView', () => {
   it('records a profile view successfully for another user', async () => {
     const req: any = { user: { id: 'u-1' }, params: { profileId: 'u-2' } };
     const res = mockRes();
+    const next = vi.fn();
 
-    await recordProfileView(req, res);
+    await recordProfileView(req, res, next);
 
     expect(prismaMock.profileView.upsert).toHaveBeenCalledWith({
       where: { viewerId_viewedId: { viewerId: 'u-1', viewedId: 'u-2' } },
