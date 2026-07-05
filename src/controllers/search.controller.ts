@@ -228,9 +228,9 @@ export const executeSearch = async (req: Request, res: Response) => {
         { createdAt: 'desc' },
         { id: 'asc' }
       ],
-      take: isAuthenticated ? pageSize + 1 : pageSize + 1,
+      take: isAuthenticated ? 1000 : pageSize + 1,
       cursor: isAuthenticated ? undefined : (cursor ? { id: String(cursor) } : undefined),
-      skip: isAuthenticated ? skip : (cursor ? 1 : 0),
+      skip: isAuthenticated ? 0 : (cursor ? 1 : 0),
     });
 
     // ── Build scoring context from the querier's own profile ─────
@@ -277,8 +277,8 @@ export const executeSearch = async (req: Request, res: Response) => {
       });
       scoredAll.sort((a, b) => b.matchScore - a.matchScore);
 
-      hasMore = scoredAll.length > pageSize;
-      const pageScored = hasMore ? scoredAll.slice(0, pageSize) : scoredAll;
+      hasMore = scoredAll.length > skip + pageSize;
+      const pageScored = scoredAll.slice(skip, skip + pageSize);
       pageResults = pageScored.map(({ user }) => user);
       // Cursor not meaningful for offset pagination; clients use page number
     } else {
