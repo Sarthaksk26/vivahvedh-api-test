@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import prisma from '../config/db';
 import { z } from 'zod';
-import { sendWelcomeEmail } from '../services/mail.service';
+import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/mail.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import { generateUniqueRegId } from '../utils/id.util';
 import {
@@ -365,3 +366,108 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   clearAuthCookies(res);
   res.status(200).json({ message: 'Logged out successfully.' });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+//  POST /api/auth/forgot-password
+// ═══════════════════════════════════════════════════════════════════
+
+const forgotPasswordSchema = z.object({
+  identifier: z.string().min(1, 'Identifier is required').trim(),
+});
+
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { identifier } = forgotPasswordSchema.parse(req.body);
+
+  // Look up user (same as login)
+  const isEmail = identifier.includes('@');
+  const user = await prisma.user.findFirst({
+    where: isEmail
+      ? { email: identifier.toLowerCase() }
+      : { OR: [{ mobile: identifier }, { regId: identifier.toUpperCase() }] },
+    include: { profile: true },
+  });
+
+  // Always return the same response to prevent user enumeration
+  const successMessage = 'If an account exists with this identifier, a password reset link has been sent to the registered email.';
+
+  if (!user || !user.email) {
+    res.status(200).json({ message: successMessage });
+    return;
+  }
+
+  // Generate secure token
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  // Store hashed token (expires in 1 hour)
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      token: hashedToken,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+
+  // Send email
+  const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${rawToken}`;
+  const firstName = user.profile?.firstName || 'User';
+  
+  await sendPasswordResetEmail(user.email, firstName, resetLink);
+
+  res.status(200).json({ message: successMessage });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  POST /api/auth/reset-password
+// ═══════════════════════════════════════════════════════════════════
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(100),
+});
+
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { token, newPassword } = resetPasswordSchema.parse(req.body);
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const resetToken = await prisma.passwordResetToken.findFirst({
+    where: {
+      token: hashedToken,
+      expiresAt: { gt: new Date() },
+      usedAt: null,
+    },
+  });
+
+  if (!resetToken) {
+    res.status(400).json({ error: 'Invalid or expired reset token.' });
+    return;
+  }
+
+  // Hash new password
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+  // Update user password and clear any forced-reset flags
+  await prisma.user.update({
+    where: { id: resetToken.userId },
+    data: {
+      password: hashedPassword,
+      requiresPasswordChange: false,
+    },
+  });
+
+  // Mark token as used
+  await prisma.passwordResetToken.update({
+    where: { id: resetToken.id },
+    data: { usedAt: new Date() },
+  });
+
+  // Force re-login everywhere by deleting all refresh tokens for this user
+  await prisma.refreshToken.deleteMany({
+    where: { userId: resetToken.userId },
+  });
+
+  res.status(200).json({ message: 'Password has been successfully reset. You can now log in.' });
+});
+

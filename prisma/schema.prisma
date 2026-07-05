@@ -45,6 +45,7 @@ model User {
   profile                UserProfile?
   birthdayWishes         BirthdayWishLog[]
   notifications          UserNotification[]
+  passwordResetTokens    PasswordResetToken[]
 
   @@index([planType, createdAt(sort: Desc)])
   @@index([role, accountStatus])
@@ -407,4 +408,17 @@ model BirthdayWishLog {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique  // Store HASHED token, not raw
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

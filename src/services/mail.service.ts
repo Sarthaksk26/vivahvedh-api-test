@@ -351,6 +351,40 @@ export const sendPasswordChangedEmail = async (to: string, regId: string) => {
   await sendMail(to, '🔐 Security Alert: Your Password was Changed', html);
 };
 
+/**
+ * Sends a password reset email
+ */
+export async function sendPasswordResetEmail(to: string, firstName: string, resetLink: string): Promise<void> {
+  const subject = 'Reset Your Password - Vivahvedh';
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #f1f5f9; padding: 20px; text-align: center; border-bottom: 3px solid #000;">
+        <h1 style="color: #0f172a; margin: 0;">Password Reset Request</h1>
+      </div>
+      <div style="padding: 30px; background-color: #ffffff;">
+        <p style="color: #334155; font-size: 16px;">Dear <strong>${firstName}</strong>,</p>
+        <p style="color: #334155; font-size: 16px; line-height: 1.6;">
+          We received a request to reset your password for your Vivahvedh account. 
+          If you didn't make this request, you can safely ignore this email.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p style="color: #64748b; font-size: 14px; text-align: center;">
+          This link will expire in 1 hour.
+        </p>
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+        <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">
+          Best regards,<br>The Vivahvedh Team
+        </p>
+      </div>
+    </div>
+  `;
+  return await sendMail(to, subject, html);
+}
+
 export const sendContactDetailsEmail = async (to: string, targetUserName: string, targetContactInfo: { mobile: string; email: string }) => {
   const safeName = escapeHTML(targetUserName);
   const safeMobile = escapeHTML(targetContactInfo.mobile);
