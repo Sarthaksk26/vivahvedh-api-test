@@ -198,6 +198,16 @@ export const executeSearch = async (req: Request, res: Response) => {
     const baseWhere: Prisma.UserWhereInput = { AND: conditions };
     const pageSize = Math.min(parseInt(String(limit)) || 20, 50); // Cap at 50
 
+    // ── Pagination strategy ──────────────────────────────────────────
+    // Authenticated searches use personalized matchScore which diverges from
+    // DB order (planType/createdAt/id). Cursor pagination would produce
+    // duplicates/skips because the display order != cursor order.
+    // For small-to-medium datasets, offset pagination is performant and correct.
+    // Guest searches (no matchScore) keep efficient cursor pagination.
+    const isAuthenticated = !!req.user?.id;
+    const page = isAuthenticated ? Math.max(0, parseInt(String(req.query.page || '0'))) : 0;
+    const skip = isAuthenticated ? page * pageSize : 0;
+
     // ── Fetch candidates with enriched data for scoring ──────────
     const matches = await prisma.user.findMany({
       where: baseWhere,
@@ -218,9 +228,9 @@ export const executeSearch = async (req: Request, res: Response) => {
         { createdAt: 'desc' },
         { id: 'asc' }
       ],
-      take: pageSize + 1,
-      cursor: cursor ? { id: String(cursor) } : undefined,
-      skip: cursor ? 1 : 0,
+      take: isAuthenticated ? pageSize + 1 : pageSize + 1,
+      cursor: isAuthenticated ? undefined : (cursor ? { id: String(cursor) } : undefined),
+      skip: isAuthenticated ? skip : (cursor ? 1 : 0),
     });
 
     // ── Build scoring context from the querier's own profile ─────
@@ -255,10 +265,31 @@ export const executeSearch = async (req: Request, res: Response) => {
     }
 
     // ── Determine pagination ─────────────────────────────────────
-    const hasMore = matches.length > pageSize;
-    const pageResults = hasMore ? matches.slice(0, pageSize) : matches;
+    let pageResults: typeof matches;
+    let nextCursor: string | null = null;
+    let hasMore = false;
 
-    // ── Score and sort ───────────────────────────────────────────
+    if (isAuthenticated) {
+      // Offset pagination: score & sort ALL fetched rows, then slice the requested page
+      const scoredAll = matches.map(user => {
+        const matchScore = computeMatchScore(user as any, scoringCtx);
+        return { user, matchScore };
+      });
+      scoredAll.sort((a, b) => b.matchScore - a.matchScore);
+
+      hasMore = scoredAll.length > pageSize;
+      const pageScored = hasMore ? scoredAll.slice(0, pageSize) : scoredAll;
+      pageResults = pageScored.map(({ user }) => user);
+      // Cursor not meaningful for offset pagination; clients use page number
+    } else {
+      // Guest: cursor pagination (no personalized scoring, just planWeight)
+      hasMore = matches.length > pageSize;
+      pageResults = hasMore ? matches.slice(0, pageSize) : matches;
+      const lastMatch = pageResults[pageResults.length - 1];
+      nextCursor = hasMore ? lastMatch?.id ?? null : null;
+    }
+
+    // ── Score and sort page results (guest path needs this too) ───────────────────────────────────────────
     const scoredResults = pageResults.map(user => {
       const matchScore = req.user?.id
         ? computeMatchScore(user as any, scoringCtx)
@@ -293,12 +324,18 @@ export const executeSearch = async (req: Request, res: Response) => {
       return safeQuery;
     });
 
-    const lastMatch = pageResults[pageResults.length - 1];
-    const nextCursor = hasMore ? lastMatch?.id ?? null : null;
+    // Build pagination response
+    const pagination: Record<string, any> = { hasMore, pageSize };
+    if (isAuthenticated) {
+      pagination.page = page;
+      pagination.nextCursor = null; // offset pagination uses page number
+    } else {
+      pagination.nextCursor = nextCursor;
+    }
 
     res.status(200).json({
       results: safeMatches,
-      pagination: { nextCursor, hasMore, pageSize },
+      pagination,
     });
 
   } catch (error) {

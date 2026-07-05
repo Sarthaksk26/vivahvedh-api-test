@@ -10,6 +10,8 @@ import { AppError } from '../utils/AppError';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendPasswordChangedEmail } from '../services/mail.service';
 import { StorageService } from '../services/storage.service';
+import { generateAccessToken, generateRefreshToken, setAuthCookies } from '../config/tokens';
+import type { AccessTokenPayload } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════
 // Zod schemas — whitelist of ALLOWED fields per sub-model.
@@ -174,18 +176,23 @@ export const uploadPhoto = asyncHandler(async (req: Request, res: Response) => {
   // req.file.path already contains the full URL or relative path from processImage middleware
   const photoUrl = req.file.path;
 
-  const existingCount = await prisma.image.count({ where: { userId } });
+  await prisma.$transaction(async (tx) => {
+    // Acquire a row-level lock on the parent User record to serialize uploads for this user
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId}::uuid FOR UPDATE`;
 
-  if (existingCount >= 5) {
-    throw new AppError('You can upload a maximum of 5 photos.', 400);
-  }
+    const existingCount = await tx.image.count({ where: { userId } });
 
-  await prisma.image.create({
-    data: {
-      userId,
-      url: photoUrl,
-      isPrimary: existingCount === 0,
-    },
+    if (existingCount >= 5) {
+      throw new AppError('You can upload a maximum of 5 photos.', 400);
+    }
+
+    await tx.image.create({
+      data: {
+        userId,
+        url: photoUrl,
+        isPrimary: existingCount === 0,
+      },
+    });
   });
 
   res.status(200).json({ success: true, photoUrl });
@@ -401,13 +408,34 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
     data: { password: hashedPassword, requiresPasswordChange: false },
   });
 
-  // Notify user about password change — awaited with try/catch to ensure reliability
+  // Revoke all existing sessions/refresh tokens for this user
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+
+  // Re-issue tokens for the current session to prevent logging the user out of their active tab
+  const tokenPayload: AccessTokenPayload = {
+    id: user.id,
+    role: user.role,
+    accountStatus: user.accountStatus,
+    planType: user.planType,
+    requiresPasswordChange: false,
+  };
+  const accessToken = generateAccessToken(tokenPayload);
+  const refreshToken = generateRefreshToken({ id: tokenPayload.id });
+
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId: tokenPayload.id,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    },
+  });
+
+  setAuthCookies(res, accessToken, refreshToken);
+
+  // Notify user about password change (fire and forget)
   if (user.email) {
-    try {
-      await sendPasswordChangedEmail(user.email, user.regId);
-    } catch (e: any) {
-      console.error('[Mail] Password change notification failed:', e.message);
-    }
+    sendPasswordChangedEmail(user.email, user.regId)
+      .catch((err: Error) => console.error('[Mail] Password change notification failed:', err.message));
   }
 
   res.status(200).json({ success: true, message: 'Password changed successfully.' });

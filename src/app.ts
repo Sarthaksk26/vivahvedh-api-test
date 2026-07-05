@@ -9,6 +9,7 @@ import userRoutes from './routes/user.routes';
 import searchRoutes from './routes/search.routes';
 import adminRoutes from './routes/admin.routes';
 import connectionRoutes from './routes/connection.routes';
+import notificationRoutes from './routes/notification.routes';
 import publicRoutes from './routes/public.routes';
 import paymentRoutes from './routes/payment.routes';
 import storyRoutes from './routes/story.routes';
@@ -151,6 +152,7 @@ app.use('/api/search', searchRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/connections', connectionRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/stories', storyRoutes);
 

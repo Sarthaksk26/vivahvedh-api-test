@@ -61,7 +61,8 @@ describe('updatePaymentStatus', () => {
     prismaMock.$transaction.mockImplementation(async (cb: any) => {
       const tx = {
         user: { update: vi.fn().mockResolvedValue({}) },
-        pendingPayment: { update: vi.fn().mockResolvedValue({}) }
+        pendingPayment: { update: vi.fn().mockResolvedValue({}) },
+        userNotification: { create: vi.fn().mockResolvedValue({}) }
       };
       await cb(tx);
     });

@@ -44,6 +44,7 @@ model User {
   preferences            UserPreferences?
   profile                UserProfile?
   birthdayWishes         BirthdayWishLog[]
+  notifications          UserNotification[]
 
   @@index([planType, createdAt(sort: Desc)])
   @@index([role, accountStatus])
@@ -192,6 +193,7 @@ model Request {
   sender     User          @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
+  @@index([senderId, createdAt])
   @@index([status])
   @@index([receiverId, status])
 }
@@ -368,6 +370,31 @@ enum PlanType {
   FREE
   SILVER
   GOLD
+}
+
+enum NotificationType {
+  PROPOSAL_SENT
+  PROPOSAL_RECEIVED
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  PAYMENT_APPROVED
+  PAYMENT_REJECTED
+  PROFILE_APPROVED
+}
+
+model UserNotification {
+  id               String             @id @default(uuid())
+  userId           String
+  type             NotificationType
+  message          String             @db.Text
+  isRead           Boolean            @default(false)
+  relatedUserId    String?
+  createdAt        DateTime           @default(now())
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead, createdAt])
 }
 
 model BirthdayWishLog {

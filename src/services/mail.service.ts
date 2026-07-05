@@ -114,6 +114,28 @@ export const sendConnectionRequestEmail = async (to: string, receiverName: strin
   await sendMail(to, `New Interest from ${safeSenderName}`, html);
 };
 
+export const sendProposalSentConfirmationEmail = async (
+  to: string,
+  senderName: string,
+  receiverName: string
+) => {
+  const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
+  const safeSenderName = escapeHTML(senderName);
+  const safeReceiverName = escapeHTML(receiverName);
+  const html = `
+    <div style="font-family: Arial, sans-serif; text-align: center; color: #333; padding: 40px;">
+      <h1 style="color: #16a34a;">Proposal Sent Successfully! ✅</h1>
+      <p style="font-size: 16px;">Dear <b>${safeSenderName}</b>,</p>
+      <p>Your match proposal to <b>${safeReceiverName}</b> has been sent successfully.</p>
+      <p>They will be notified and can now view your profile and respond.</p>
+      <a href="${baseUrl}/dashboard" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;">
+        Go to Dashboard
+      </a>
+    </div>
+  `;
+  await sendMail(to, `Your Proposal to ${safeReceiverName} Was Sent`, html);
+};
+
 export const sendConnectionAcceptedEmail = async (to: string, receiverName: string, accepterName: string) => {
   const baseUrl = process.env.CLIENT_URL || 'https://vivahvedh.com';
   const safeReceiverName = escapeHTML(receiverName);

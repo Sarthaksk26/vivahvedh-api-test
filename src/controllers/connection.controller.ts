@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import prisma from '../config/db';
-import { sendConnectionRequestEmail, sendConnectionAcceptedEmail, sendContactDetailsEmail } from '../services/mail.service';
+import { sendConnectionRequestEmail, sendConnectionAcceptedEmail, sendContactDetailsEmail, sendProposalSentConfirmationEmail } from '../services/mail.service';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
+import { getSilverDailyProposalLimit } from '../config/env';
 
 // 1. Send an Interest Request to another user
 const sendInterestSchema = z.object({
@@ -25,11 +26,33 @@ export const sendInterest = asyncHandler(async (req: Request, res: Response) => 
   }
 
   if (currentUser.planType === 'FREE') {
-    res.status(403).json({ 
+    res.status(403).json({
       error: "Upgrade to Silver or Gold plan to send match proposals.",
       code: "PLAN_UPGRADE_REQUIRED"
     });
     return;
+  }
+
+  // ── SILVER daily proposal limit ──────────────────────────────────
+  if (currentUser.planType === 'SILVER') {
+    const limit = getSilverDailyProposalLimit();
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const todayCount = await prisma.request.count({
+      where: {
+        senderId,
+        createdAt: { gte: startOfDay },
+      },
+    });
+
+    if (todayCount >= limit) {
+      res.status(403).json({
+        error: 'You have reached your daily limit of match proposals. Upgrade to Gold for unlimited proposals.',
+        code: 'DAILY_LIMIT_REACHED',
+      });
+      return;
+    }
   }
 
   if (senderId === receiverId) {
@@ -74,12 +97,18 @@ export const sendInterest = asyncHandler(async (req: Request, res: Response) => 
     include: { profile: true }
   });
 
-  if (receiverData?.email && senderData?.profile) {
+  if (receiverData?.email && senderData?.profile && senderData?.email) {
     sendConnectionRequestEmail(
-      receiverData.email, 
-      receiverData.profile?.firstName || 'Member', 
+      receiverData.email,
+      receiverData.profile?.firstName || 'Member',
       `${senderData.profile?.firstName} ${senderData.profile?.lastName}`
     ).catch((err: Error) => console.error('[Mail] Interest email failed:', err.message));
+
+    sendProposalSentConfirmationEmail(
+      senderData.email,
+      `${senderData.profile?.firstName} ${senderData.profile?.lastName}`,
+      `${receiverData.profile?.firstName} ${receiverData.profile?.lastName}`
+    ).catch((err: Error) => console.error('[Mail] Proposal sent confirmation failed:', err.message));
 
     const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
     sendAdminNotification(
@@ -87,6 +116,30 @@ export const sendInterest = asyncHandler(async (req: Request, res: Response) => 
       `<p><b>Sender:</b> ${escapeHTML(senderData.profile?.firstName || '')} ${escapeHTML(senderData.profile?.lastName || '')} (${escapeHTML(senderData.regId)})</p>
        <p><b>Receiver:</b> ${escapeHTML(receiverData.profile?.firstName || '')} ${escapeHTML(receiverData.profile?.lastName || '')} (${escapeHTML(receiverData.regId)})</p>`
     ).catch((err: Error) => console.error('[Mail] Admin interest notification failed:', err.message));
+  }
+
+  // Create in-app notifications
+  if (senderData?.profile && receiverData?.profile) {
+    await Promise.allSettled([
+      // Notification for receiver: PROPOSAL_RECEIVED
+      prisma.userNotification.create({
+        data: {
+          userId: receiverId,
+          type: 'PROPOSAL_RECEIVED',
+          message: `New proposal from ${senderData.profile.firstName} ${senderData.profile.lastName}`,
+          relatedUserId: senderId,
+        },
+      }),
+      // Notification for sender: PROPOSAL_SENT
+      prisma.userNotification.create({
+        data: {
+          userId: senderId,
+          type: 'PROPOSAL_SENT',
+          message: `Your proposal to ${receiverData.profile.firstName} ${receiverData.profile.lastName} was sent successfully`,
+          relatedUserId: receiverId,
+        },
+      }),
+    ]).catch((err: Error) => console.error('[Notification] sendInterest notifications failed:', err.message));
   }
 
   res.status(200).json({ message: "Interest expressed successfully!", request: newRequest });
@@ -140,6 +193,18 @@ export const acceptInterest = asyncHandler(async (req: Request, res: Response) =
     ).catch((err: Error) => console.error('[Mail] Admin accept notification failed:', err.message));
   }
 
+  // Create in-app notification for sender: PROPOSAL_ACCEPTED
+  if (senderData?.profile && receiverData?.profile) {
+    await prisma.userNotification.create({
+      data: {
+        userId: request.senderId,
+        type: 'PROPOSAL_ACCEPTED',
+        message: `${receiverData.profile.firstName} ${receiverData.profile.lastName} accepted your proposal`,
+        relatedUserId: receiverId,
+      },
+    }).catch((err: Error) => console.error('[Notification] acceptInterest notification failed:', err.message));
+  }
+
   res.status(200).json({ message: "Request accepted! You are now connected.", request: updatedRequest });
 });
 
@@ -165,6 +230,27 @@ export const rejectInterest = asyncHandler(async (req: Request, res: Response) =
       'Match Proposal Declined',
       `<p>Connection ID: ${escapeHTML(requestId)} was declined by the receiver.</p>`
     ).catch(() => {});
+
+    // Create in-app notification for sender: PROPOSAL_REJECTED (gentle wording)
+    const senderData = await prisma.user.findUnique({
+      where: { id: request.senderId },
+      include: { profile: true }
+    });
+    const receiverData = await prisma.user.findUnique({
+      where: { id: receiverId },
+      include: { profile: true }
+    });
+
+    if (senderData?.profile && receiverData?.profile) {
+      await prisma.userNotification.create({
+        data: {
+          userId: request.senderId,
+          type: 'PROPOSAL_REJECTED',
+          message: `${receiverData.profile.firstName} ${receiverData.profile.lastName} couldn't accept your proposal at this time`,
+          relatedUserId: receiverId,
+        },
+      }).catch((err: Error) => console.error('[Notification] rejectInterest notification failed:', err.message));
+    }
   }
 
   res.status(200).json({ message: "Request rejected." });

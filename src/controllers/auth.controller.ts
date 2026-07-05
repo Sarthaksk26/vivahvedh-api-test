@@ -134,29 +134,22 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     }
   });
 
-  // Fire and forget with visible error logging — but now AWAITED to ensure connection stability
+  // Fire and forget email sends — don't block the HTTP response
   if (emailLower) {
-    try {
-      await sendWelcomeEmail(emailLower, newUser.profile?.firstName || validatedData.firstName, newRegId);
-    } catch (err: any) {
-      console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message);
-    }
+    sendWelcomeEmail(emailLower, newUser.profile?.firstName || validatedData.firstName, newRegId)
+      .catch((err: Error) => console.error(`[Welcome Email] Failed to send to ${emailLower}:`, err.message));
   }
 
-  // Notify Admin of new registration
-  try {
-    const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
-    await sendAdminNotification(
-      'New User Registered',
-      `<p><b>Name:</b> ${escapeHTML(validatedData.firstName)} ${escapeHTML(validatedData.lastName)}</p>
-       <p><b>RegID:</b> ${escapeHTML(newRegId)}</p>
-       <p><b>Email:</b> ${escapeHTML(emailLower)}</p>
-       <p><b>Mobile:</b> ${escapeHTML(validatedData.mobile)}</p>
-       <p>Please review and approve this profile in the admin panel.</p>`
-    );
-  } catch (e: any) {
-    console.error("Admin Notify Error:", e.message);
-  }
+  // Notify Admin of new registration (fire and forget)
+  const { sendAdminNotification, escapeHTML } = await import('../services/mail.service');
+  sendAdminNotification(
+    'New User Registered',
+    `<p><b>Name:</b> ${escapeHTML(validatedData.firstName)} ${escapeHTML(validatedData.lastName)}</p>
+     <p><b>RegID:</b> ${escapeHTML(newRegId)}</p>
+     <p><b>Email:</b> ${escapeHTML(emailLower)}</p>
+     <p><b>Mobile:</b> ${escapeHTML(validatedData.mobile)}</p>
+     <p>Please review and approve this profile in the admin panel.</p>`
+  ).catch((err: Error) => console.error('[Mail] Admin notification failed:', err.message));
 
   res.status(201).json({
     message: 'Registration successful! Awaiting admin approval.',

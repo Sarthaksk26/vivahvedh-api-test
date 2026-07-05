@@ -104,6 +104,15 @@ export const approveUser = asyncHandler(async (req: Request, res: Response) => {
       .catch((err: Error) => console.error(`[Mail] Approval email failed for ${updatedUser.email}:`, err.message));
   }
 
+  // Create in-app notification for the approved user
+  await prisma.userNotification.create({
+    data: {
+      userId: targetUserId,
+      type: 'PROFILE_APPROVED',
+      message: 'Your profile has been approved! You can now browse matches and send proposals.',
+    },
+  }).catch((err: Error) => console.error('[Notification] PROFILE_APPROVED failed:', err.message));
+
   res.status(200).json({ message: 'User approved successfully', user: updatedUser });
 });
 

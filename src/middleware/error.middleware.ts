@@ -51,7 +51,7 @@ export const errorHandler = (
   }
 
   // ── Multer errors (file size, type) ───────────────────────────────
-  if (err.name === 'MulterError' || err.message?.includes('Invalid file type')) {
+  if (err.name === 'MulterError' || err.message?.includes('Invalid file type') || err.message?.includes('Invalid document type') || err.message?.includes('Invalid image type')) {
     res.status(400).json({ error: err.message });
     return;
   }

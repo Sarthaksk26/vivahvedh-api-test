@@ -11,7 +11,7 @@ import { StorageService } from '../services/storage.service';
 
 // ── Shared constants ────────────────────────────────────────────────
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-const DOCUMENT_MIME_TYPES = ['application/pdf'] as const;
+const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const;
 
 // ── Image upload (memory storage → Cloudinary via StorageService) ───
 const imageFilter = (_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -77,9 +77,11 @@ export const processDocument = async (req: Request, _res: Response, next: NextFu
 
   try {
     const userId = (req as any).user?.id || 'anon';
-    const filename = `doc-${userId}-${Date.now()}-${Math.round(Math.random() * 1e4)}.pdf`;
+    const isImage = req.file.mimetype.startsWith('image/');
+    const ext = isImage ? '.webp' : '.pdf';
+    const filename = `doc-${userId}-${Date.now()}-${Math.round(Math.random() * 1e4)}${ext}`;
 
-    const url = await StorageService.uploadDocument(req.file.buffer, filename);
+    const url = await StorageService.uploadDocument(req.file.buffer, filename, req.file.mimetype);
 
     req.file.path = url;
     req.file.filename = filename;

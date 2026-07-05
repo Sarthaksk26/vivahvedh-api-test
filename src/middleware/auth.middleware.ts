@@ -180,8 +180,9 @@ export const requireActiveAccount = async (req: Request, res: Response, next: Ne
     }
 
     if (req.user.accountStatus === 'INACTIVE') {
-      const allowed = ['/api/user/profile', '/api/user/update', '/api/user/upload-photo', '/api/user/change-password', '/api/auth/login', '/api/auth/refresh', '/api/auth/logout'];
-      const isAllowed = allowed.some(p => req.originalUrl.startsWith(p));
+      const allowed = ['/api/user/profile', '/api/user/update', '/api/user/upload-photo', '/api/user/upload-kyc', '/api/user/upload-income-proof', '/api/user/upload-medical-report', '/api/user/change-password', '/api/auth/login', '/api/auth/refresh', '/api/auth/logout'];
+      const path = req.originalUrl.split('?')[0];
+      const isAllowed = allowed.some(p => path === p);
       
       if (!isAllowed) {
         res.status(403).json({ 

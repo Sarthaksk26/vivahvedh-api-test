@@ -132,6 +132,17 @@ export const updatePaymentStatus = asyncHandler(async (req: Request, res: Respon
       where: { id },
       data: { status },
     });
+
+    // Create in-app notification inside transaction for atomicity with payment status
+    await tx.userNotification.create({
+      data: {
+        userId: payment.userId,
+        type: status === 'APPROVED' ? 'PAYMENT_APPROVED' : 'PAYMENT_REJECTED',
+        message: status === 'APPROVED'
+          ? `Your ${payment.planType} payment was approved. Your plan is now active!`
+          : `Your ${payment.planType} payment was rejected. Please check your transaction ID and try again.`,
+      },
+    });
   });
 
   if (payment.user?.email) {

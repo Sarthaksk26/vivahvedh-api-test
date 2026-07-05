@@ -5,3 +5,16 @@ export const getJwtSecret = () => {
   }
   return secret;
 };
+
+/**
+ * Daily proposal limit for SILVER-plan users.
+ * Override via env var SILVER_DAILY_PROPOSAL_LIMIT; defaults to 4.
+ */
+export const getSilverDailyProposalLimit = (): number => {
+  const raw = process.env.SILVER_DAILY_PROPOSAL_LIMIT;
+  if (raw) {
+    const parsed = parseInt(raw, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return 4;
+};
