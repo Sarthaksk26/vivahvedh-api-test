@@ -414,6 +414,37 @@ export const getPublicProfile = async (req: Request, res: Response) => {
       showContactInfo = true;
     }
 
+    // ── Photo Gallery Gating ────────────────────────────────────────
+    // Full gallery is only visible to: admin, profile owner, ACCEPTED
+    // connections, or SILVER/GOLD plan viewers. Everyone else sees only
+    // the primary photo. This enforces the paywall server-side — the
+    // frontend rendering restriction alone is bypassable via direct API call.
+    let showFullGallery = false;
+
+    if (isAdmin) {
+      showFullGallery = true;
+    } else if (viewerId === id) {
+      showFullGallery = true; // own profile
+    } else if (showContactInfo) {
+      // showContactInfo is true for ACCEPTED connections — reuse that result
+      showFullGallery = true;
+    } else if (viewerId) {
+      // Check viewer's plan type
+      const viewer = await prisma.user.findUnique({
+        where: { id: viewerId },
+        select: { planType: true }
+      });
+      if (viewer?.planType === 'SILVER' || viewer?.planType === 'GOLD') {
+        showFullGallery = true;
+      }
+    }
+
+    // Truncate images array if viewer is not eligible for full gallery
+    if (!showFullGallery && userProfile.images) {
+      const primaryImage = userProfile.images.find(img => img.isPrimary) || userProfile.images[0];
+      userProfile.images = primaryImage ? [primaryImage] : [];
+    }
+
     const safeQuery = maskPrivateDetails(userProfile, showContactInfo);
 
     if (!req.user && safeQuery.profile) {
