@@ -13,8 +13,15 @@ const getAccessSecret = (): string => {
 };
 
 const getRefreshSecret = (): string => {
-  // Falls back to JWT_SECRET + suffix if JWT_REFRESH_SECRET not set
-  const secret = process.env.JWT_REFRESH_SECRET || `${getAccessSecret()}_refresh`;
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) {
+    // In production, require a separate, explicit refresh secret
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_REFRESH_SECRET must be set in production (must differ from JWT_SECRET).');
+    }
+    // Dev/test fallback — never used in production
+    return `${getAccessSecret()}_refresh`;
+  }
   return secret;
 };
 
