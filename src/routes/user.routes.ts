@@ -5,6 +5,7 @@ import {
   getProfileViewers, uploadKyc, uploadIncomeProof, uploadMedicalReport
 } from '../controllers/user.controller';
 import { requireAuth, requireActivePassword, requireActiveAccount } from '../middleware/auth.middleware';
+import { getSignedDocumentUrl } from '../controllers/document.controller';
 import { upload, processImage, uploadDocument, processDocument } from '../config/multer';
 
 const router = Router();
@@ -13,6 +14,7 @@ const router = Router();
 router.post('/change-password', requireAuth, changePassword);
 router.delete('/delete-photo/:imageId', requireAuth, deletePhoto);
 router.patch('/set-profile-photo/:imageId', requireAuth, setProfilePhoto);
+router.get('/documents/:type', requireAuth, getSignedDocumentUrl);
 
 // Routes that need auth + active password + active account status check
 router.use(requireAuth, requireActivePassword, requireActiveAccount);

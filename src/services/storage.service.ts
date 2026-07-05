@@ -78,6 +78,7 @@ export class StorageService {
     const options: Record<string, unknown> = {
       folder: 'vivahvedh/documents',
       resource_type: isImage ? 'image' as const : 'raw' as const,
+      type: 'authenticated', // Prevent public access via direct URL
     };
     if (isImage) {
       options.format = 'webp';
