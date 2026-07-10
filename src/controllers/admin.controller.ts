@@ -303,20 +303,25 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
 });
 
 export const getAdminStats = asyncHandler(async (req: Request, res: Response) => {
-  const [userCount, pendingApprovals, connectionCount, storyCount, paymentCount] = await Promise.all([
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [totalUsers, activeUsers, pendingApprovals, totalConnections, pendingPayments, thisMonthRegs] = await Promise.all([
     prisma.user.count({ where: { role: 'USER' } }),
-    prisma.user.count({ where: { accountStatus: 'INACTIVE' } }),
+    prisma.user.count({ where: { role: 'USER', accountStatus: 'ACTIVE' } }),
+    prisma.user.count({ where: { role: 'USER', accountStatus: 'INACTIVE' } }),
     prisma.request.count(),
-    prisma.successStory.count(),
-    prisma.pendingPayment.count({ where: { status: 'PENDING' } })
+    prisma.pendingPayment.count({ where: { status: 'PENDING' } }),
+    prisma.user.count({ where: { role: 'USER', createdAt: { gte: firstDayOfMonth } } })
   ]);
 
   res.status(200).json({
-    userCount,
+    totalUsers,
+    activeUsers,
     pendingApprovals,
-    connectionCount,
-    storyCount,
-    paymentCount
+    pendingPayments,
+    totalConnections,
+    thisMonthRegs
   });
 });
 
@@ -448,7 +453,7 @@ export const updateUserByAdmin = asyncHandler(async (req: Request, res: Response
       ...(preferences && { preferences: { upsert: { create: preferences, update: preferences } } }),
       ...(address && { addresses: {
         upsert: {
-          where: { id: (await prisma.userAddress.findFirst({ where: { userId: id } }))?.id || '' },
+          where: { id: (await prisma.userAddress.findFirst({ where: { userId: id } }))?.id || '00000000-0000-0000-0000-000000000000' },
           create: { addressType: 'PRIMARY', ...address },
           update: address,
         }
