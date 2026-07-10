@@ -62,18 +62,36 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
     const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
     // 3. Taxonomy & Field Mappings
-    const mappedGender = String(member.gender).toUpperCase() === 'M' ? 'MALE' : 'FEMALE';
+    let mappedGender: 'MALE' | 'FEMALE' | 'OTHER' = 'OTHER';
+    if (member.gender) {
+      const g = String(member.gender).toUpperCase();
+      if (g === 'M' || g === 'MALE') mappedGender = 'MALE';
+      else if (g === 'F' || g === 'FEMALE') mappedGender = 'FEMALE';
+    }
     
-    let mappedStatus: any = 'UNMARRIED';
-    if (member.maritalStatus === 'Divorced') mappedStatus = 'DIVORCED';
-    if (member.maritalStatus === 'Widowed') mappedStatus = 'WIDOWED';
-    if (member.maritalStatus === 'Separated') mappedStatus = 'SEPARATED';
+    let mappedStatus: 'UNMARRIED' | 'DIVORCED' | 'WIDOWED' | 'SEPARATED' = 'UNMARRIED';
+    if (member.maritalStatus) {
+      const ms = String(member.maritalStatus).toLowerCase();
+      if (ms.includes('divorc')) mappedStatus = 'DIVORCED';
+      else if (ms.includes('widow')) mappedStatus = 'WIDOWED';
+      else if (ms.includes('separat')) mappedStatus = 'SEPARATED';
+      else if (ms.includes('unmarried') || ms.includes('single')) mappedStatus = 'UNMARRIED';
+    }
 
     const religionId = member.religionId ? parseInt(member.religionId) : null;
     const casteId = member.casteId ? parseInt(member.casteId) : null;
     const subCasteId = member.subCasteId ? parseInt(member.subCasteId) : null;
 
-    // 4. Photo Migration
+    let parsedBirthDateTime: Date | null = null;
+    if (member.birthDateTime) {
+      const d = new Date(member.birthDateTime);
+      if (!isNaN(d.getTime())) parsedBirthDateTime = d;
+    }
+
+    const smoke = member.smoke === 'Yes' || member.smoke === 'Y' || member.smoke === '1';
+    const drink = member.drink === 'Yes' || member.drink === 'Y' || member.drink === '1';
+
+    // 4. Photo & KYC Migration
     const uploadedImages = [];
     const baseUrl = process.env.LEGACY_IMAGE_BASE_URL || 'https://vivahvedh.com/uploads/';
     for (const img of images) {
@@ -99,6 +117,50 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
       }
     }
 
+    let kycDocumentUrl: string | null = null;
+    let kycType: 'AADHAR' | 'PAN' | 'PASSPORT' | null = null;
+    if (member.idProof) {
+      try {
+        const docUrl = member.idProof.startsWith('http') ? member.idProof : `${baseUrl}${member.idProof}`;
+        const response = await fetch(docUrl);
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const ext = member.idProof.split('.').pop()?.toLowerCase();
+          const mimeType = ext === 'pdf' ? 'application/pdf' : 'image/jpeg';
+          
+          const uploadedUrl = await StorageService.uploadDocument(buffer, member.idProof, mimeType);
+          kycDocumentUrl = uploadedUrl;
+          
+          const lowerProof = member.idProof.toLowerCase();
+          if (lowerProof.includes('pan')) kycType = 'PAN';
+          else if (lowerProof.includes('passport')) kycType = 'PASSPORT';
+          else kycType = 'AADHAR';
+        } else {
+          await logError(regId, `Failed to download KYC doc ${member.idProof}: HTTP ${response.status}`);
+        }
+      } catch (e: any) {
+        await logError(regId, `Failed to upload KYC doc ${member.idProof} to Cloudinary: ${e.message}`);
+      }
+    }
+
+    const addresses = [];
+    if (member.permanentAddress) {
+      addresses.push({
+        addressType: 'PERMANENT',
+        addressLine: member.permanentAddress,
+        talukaId: member.talukaId ? parseInt(member.talukaId) : null,
+        districtId: member.districtId ? parseInt(member.districtId) : null,
+        stateId: member.stateId ? parseInt(member.stateId) : null,
+      });
+    }
+    if (member.currentAddress && member.currentAddress !== member.permanentAddress) {
+      addresses.push({
+        addressType: 'CURRENT',
+        addressLine: member.currentAddress,
+      });
+    }
+
     // 5. Transaction: Safely insert into PostgreSQL
     await prisma.user.create({
       data: {
@@ -108,7 +170,10 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
         password: hashedPassword,
         accountStatus: member.regStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
         paymentDone: member.paymentDone === 'Yes',
+        profileCreatedBy: member.createdBy || null,
         requiresPasswordChange: true, // Force password reset on first login
+        kycDocumentUrl,
+        kycType,
 
         profile: {
           create: {
@@ -117,11 +182,12 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
             middleName: member.middleName || '',
             gender: mappedGender,
             maritalStatus: mappedStatus,
+            birthDateTime: parsedBirthDateTime,
             birthPlace: member.birthPlace || null,
             aboutMe: member.aboutMe || null,
-            religionId: !isNaN(religionId as number) ? religionId : null,
-            casteId: !isNaN(casteId as number) ? casteId : null,
-            subCasteId: !isNaN(subCasteId as number) ? subCasteId : null,
+            religionId: religionId && !isNaN(religionId) ? religionId : null,
+            casteId: casteId && !isNaN(casteId) ? casteId : null,
+            subCasteId: subCasteId && !isNaN(subCasteId) ? subCasteId : null,
           }
         },
 
@@ -130,8 +196,19 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
             fatherName: member.fatherFullName || null,
             fatherOccupation: member.fatherOccupation || null,
             motherName: member.motherFullName || null,
+            motherOccupation: member.motherOccupation || null,
+            motherHometown: member.motherHometown || null,
+            maternalUncleName: member.maternalUncleName || null,
             brothers: parseInt(member.brothers) || 0,
+            marriedBrothers: parseInt(member.marriedBrothers) || 0,
             sisters: parseInt(member.sisters) || 0,
+            marriedSisters: parseInt(member.marriedSisters) || 0,
+            relativesSirnames: member.relativesSirnames || null,
+            familyBackground: member.familyBackground || null,
+            familyWealth: member.family_wealth || null,
+            agricultureLand: member.agricultureLand || null,
+            plot: member.plot || null,
+            flat: member.flat || null,
           }
         },
 
@@ -143,7 +220,43 @@ async function migrateMember(member: any, images: any[]): Promise<'migrated' | '
              complexion: member.complexion || null,
              health: member.health || null,
              diet: member.diet || null,
+             smoke,
+             drink,
            }
+        },
+
+        education: {
+          create: {
+            qualificationId: member.qualification ? parseInt(member.qualification) : null,
+            trade: member.trade || null,
+            college: member.collegeuniversity || null,
+            jobBusiness: member.job_business || null,
+            jobAddress: member.job_businessAddress || null,
+            annualIncome: member.annualincome || null,
+            specialAchievement: member.specialAchievement || null,
+          }
+        },
+
+        astrology: {
+          create: {
+            gothra: member.gothra || null,
+            rashi: member.rashi || null,
+            nakshatra: member.nakshatra || null,
+            charan: member.charan || null,
+            nadi: member.nadi || null,
+            gan: member.gan || null,
+            mangal: member.mangal || null,
+          }
+        },
+
+        preferences: {
+          create: {
+            expectations: member.expectations || null,
+          }
+        },
+
+        addresses: {
+          create: addresses,
         },
 
         images: {
