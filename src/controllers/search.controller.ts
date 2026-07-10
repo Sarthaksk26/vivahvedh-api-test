@@ -208,7 +208,13 @@ export const executeSearch = async (req: Request, res: Response) => {
     const page = isAuthenticated ? Math.max(0, parseInt(String(req.query.page || '0'))) : 0;
     const skip = isAuthenticated ? page * pageSize : 0;
 
+    // ── Count total matching candidates for pagination metadata ──
+    const totalResults = await prisma.user.count({ where: baseWhere });
+
     // ── Fetch candidates with enriched data for scoring ──────────
+    // For authenticated users, fetch top 500 candidates for global scoring.
+    // This ensures high-quality matches surface on page 1 regardless of DB order.
+    const SCORING_POOL_SIZE = 500;
     const matches = await prisma.user.findMany({
       where: baseWhere,
       include: {
@@ -228,7 +234,7 @@ export const executeSearch = async (req: Request, res: Response) => {
         { createdAt: 'desc' },
         { id: 'asc' }
       ],
-      take: isAuthenticated ? 1000 : pageSize + 1,
+      take: isAuthenticated ? SCORING_POOL_SIZE : pageSize + 1,
       cursor: isAuthenticated ? undefined : (cursor ? { id: String(cursor) } : undefined),
       skip: isAuthenticated ? 0 : (cursor ? 1 : 0),
     });
@@ -325,9 +331,10 @@ export const executeSearch = async (req: Request, res: Response) => {
     });
 
     // Build pagination response
-    const pagination: Record<string, any> = { hasMore, pageSize };
+    const pagination: Record<string, any> = { hasMore, pageSize, totalResults };
     if (isAuthenticated) {
       pagination.page = page;
+      pagination.totalPages = Math.ceil(Math.min(totalResults, SCORING_POOL_SIZE) / pageSize);
       pagination.nextCursor = null; // offset pagination uses page number
     } else {
       pagination.nextCursor = nextCursor;
