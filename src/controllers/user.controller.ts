@@ -10,7 +10,7 @@ import { AppError } from '../utils/AppError';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendPasswordChangedEmail } from '../services/mail.service';
 import { StorageService } from '../services/storage.service';
-import { generateAccessToken, generateRefreshToken, setAuthCookies } from '../config/tokens';
+import { generateAccessToken, generateRefreshToken, setAuthCookies, clearAuthCookies } from '../config/tokens';
 import type { AccessTokenPayload } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -508,4 +508,67 @@ export const getProfileViewers = asyncHandler(async (req: Request, res: Response
   });
 
   res.status(200).json(viewers);
+});
+
+export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
+  const userId = req.user.id;
+  
+  // Verify user exists before attempting to delete
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    throw new AppError('User not found.', 404);
+  }
+
+  // Delete all refresh tokens
+  await prisma.refreshToken.deleteMany({ where: { userId } });
+  
+  // Clear auth cookies
+  clearAuthCookies(res);
+  
+  // Delete the user from the database.
+  // Because schema.prisma uses `onDelete: Cascade` for all relations 
+  // (UserProfile, UserAddress, UserPhysical, etc.), this will safely wipe all PII.
+  await prisma.user.delete({ where: { id: userId } });
+
+  res.status(200).json({ success: true, message: 'Account and all associated personal data have been permanently deleted.' });
+});
+
+export const reportProfile = asyncHandler(async (req: Request, res: Response) => {
+  const reporterId = req.user.id;
+  const { targetUserId, reason, description } = req.body;
+
+  if (!targetUserId || !reason) {
+    throw new AppError('Target user ID and reason are required.', 400);
+  }
+
+  if (reporterId === targetUserId) {
+    throw new AppError('You cannot report yourself.', 400);
+  }
+
+  // Verify target user exists
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!targetUser) {
+    throw new AppError('User not found.', 404);
+  }
+
+  // Prevent duplicate pending reports from the same user for the same target
+  const existingReport = await prisma.report.findFirst({
+    where: { reporterId, reportedUserId: targetUserId, status: 'PENDING' }
+  });
+
+  if (existingReport) {
+    res.status(200).json({ success: true, message: 'You have already reported this profile. Our team is reviewing it.' });
+    return;
+  }
+
+  await prisma.report.create({
+    data: {
+      reporterId,
+      reportedUserId: targetUserId,
+      reason,
+      description
+    }
+  });
+
+  res.status(200).json({ success: true, message: 'Profile has been reported to the admin team.' });
 });

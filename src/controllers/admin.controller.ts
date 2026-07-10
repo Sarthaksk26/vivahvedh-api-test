@@ -5,6 +5,7 @@ import prisma from '../config/db';
 import { z } from 'zod';
 import { sendApprovalEmail, sendOfflineCredentialsEmail, sendEnquiryReplyEmail } from '../services/mail.service';
 import { asyncHandler } from '../utils/asyncHandler';
+import { AppError } from '../utils/AppError';
 
 import { generateUniqueRegId } from '../utils/id.util';
 
@@ -709,4 +710,33 @@ export const updateKycStatus = asyncHandler(async (req: Request, res: Response) 
   });
 
   res.status(200).json({ message: 'KYC status updated successfully.', user: updatedUser });
+});
+export const getReports = asyncHandler(async (req: Request, res: Response) => {
+  const reports = await prisma.report.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      reporter: {
+        select: { id: true, regId: true, mobile: true, profile: { select: { firstName: true, lastName: true } } }
+      },
+      reportedUser: {
+        select: { id: true, regId: true, mobile: true, accountStatus: true, profile: { select: { firstName: true, lastName: true } } }
+      }
+    }
+  });
+  res.status(200).json(reports);
+});
+
+export const updateReportStatus = asyncHandler(async (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  const { status } = req.body;
+  
+  if (!['PENDING', 'REVIEWED', 'RESOLVED'].includes(status)) {
+    throw new AppError('Invalid report status.', 400);
+  }
+
+  const report = await prisma.report.update({
+    where: { id },
+    data: { status: status as any }
+  });
+  res.status(200).json(report);
 });

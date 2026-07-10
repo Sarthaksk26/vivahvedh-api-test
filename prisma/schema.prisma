@@ -46,6 +46,8 @@ model User {
   birthdayWishes         BirthdayWishLog[]
   notifications          UserNotification[]
   passwordResetTokens    PasswordResetToken[]
+  reportsMade            Report[]          @relation("ReportedBy")
+  reportsReceived        Report[]          @relation("ReportedUsers")
 
   @@index([planType, createdAt(sort: Desc)])
   @@index([role, accountStatus])
@@ -431,4 +433,28 @@ model RefreshTokenGrace {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}
+
+model Report {
+  id               String       @id @default(uuid())
+  reporterId       String
+  reportedUserId   String
+  reason           String
+  description      String?      @db.Text
+  status           ReportStatus @default(PENDING)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  reporter         User         @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser     User         @relation("ReportedUsers", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([status])
 }

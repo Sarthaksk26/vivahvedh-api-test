@@ -12,6 +12,13 @@ const { prismaMock } = vi.hoisted(() => ({
     profileView: {
       upsert: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+      delete: vi.fn(),
+    },
+    refreshToken: {
+      deleteMany: vi.fn(),
+    }
   }
 }));
 
@@ -111,5 +118,48 @@ describe('User Controller - recordProfileView', () => {
     });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({ recorded: true });
+  });
+});
+
+describe('User Controller - deleteAccount', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('throws a 404 error if the user to delete does not exist', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    const req: any = { user: { id: 'non-existent' } };
+    const res = mockRes();
+    const next = vi.fn();
+
+    const { deleteAccount } = await import('./user.controller');
+    await deleteAccount(req, res, next);
+
+    expect(next).toHaveBeenCalledWith(expect.any(AppError));
+    expect(next.mock.calls[0][0].statusCode).toBe(404);
+    expect(next.mock.calls[0][0].message).toBe('User not found.');
+  });
+
+  it('successfully deletes user and clears auth cookies if user exists', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u-1' });
+    prismaMock.refreshToken.deleteMany.mockResolvedValue({ count: 1 });
+    prismaMock.user.delete.mockResolvedValue({ id: 'u-1' });
+
+    const req: any = { user: { id: 'u-1' } };
+    const res = mockRes();
+    res.clearCookie = vi.fn(); // clearAuthCookies calls this
+    const next = vi.fn();
+
+    const { deleteAccount } = await import('./user.controller');
+    await deleteAccount(req, res, next);
+
+    expect(prismaMock.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
+    expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u-1' } });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      message: 'Account and all associated personal data have been permanently deleted.'
+    });
   });
 });

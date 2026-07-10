@@ -32,12 +32,16 @@ const registerSchema = z.object({
   email: z.string().email().max(254).toLowerCase(),
   birthDate: z.string().refine((val) => {
     const dob = new Date(`${val.slice(0, 10)}T12:00:00Z`);
-    if (isNaN(dob.getTime())) return false;
-    const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-    return age >= 18;
-  }, { message: 'Date of Birth is required and must be at least 18 years old.' }),
+    return !isNaN(dob.getTime());
+  }, { message: 'Date of Birth is required and must be a valid date.' }),
   profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional()
-}).strict();
+}).strict().refine((data) => {
+  const dob = new Date(`${data.birthDate.slice(0, 10)}T12:00:00Z`);
+  const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+  if (data.gender === 'MALE' && age < 21) return false;
+  if (data.gender === 'FEMALE' && age < 18) return false;
+  return true;
+}, { message: 'Legal marriage age in India is 21+ for Men and 18+ for Women.', path: ['birthDate'] });
 
 const loginSchema = z.object({
   identifier: z.string().min(3).max(254).trim(),

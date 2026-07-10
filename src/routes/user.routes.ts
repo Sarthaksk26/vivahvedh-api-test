@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   getMyProfile, uploadPhoto, deletePhoto, setProfilePhoto, updateProfile,
   changePassword, shortlistProfile, getMyShortlist,
-  getProfileViewers, uploadKyc, uploadIncomeProof, uploadMedicalReport
+  getProfileViewers, uploadKyc, uploadIncomeProof, uploadMedicalReport, deleteAccount, reportProfile
 } from '../controllers/user.controller';
 import { requireAuth, requireActivePassword, requireActiveAccount } from '../middleware/auth.middleware';
 import { getSignedDocumentUrl } from '../controllers/document.controller';
@@ -12,6 +12,8 @@ const router = Router();
 
 // Routes that only need auth (not active password check)
 router.post('/change-password', requireAuth, changePassword);
+router.delete('/account', requireAuth, deleteAccount);
+router.post('/report', requireAuth, reportProfile);
 router.delete('/delete-photo/:imageId', requireAuth, deletePhoto);
 router.patch('/set-profile-photo/:imageId', requireAuth, setProfilePhoto);
 router.get('/documents/:type', requireAuth, getSignedDocumentUrl);

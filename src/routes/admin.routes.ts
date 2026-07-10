@@ -19,7 +19,9 @@ import {
   getBirthdayWishLogs,
   getConnectionLogs,
   getProfitStats,
-  getAllUsersWithLocation
+  getAllUsersWithLocation,
+  getReports,
+  updateReportStatus
 } from '../controllers/admin.controller';
 import { getAdminNotifications } from '../controllers/notification.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
@@ -43,6 +45,10 @@ router.get('/users/by-location', requireAuth, requireAdmin, getAllUsersWithLocat
 
 // @route   PATCH /api/admin/users/:id/kyc
 router.patch('/users/:id/kyc', requireAuth, requireAdmin, updateKycStatus);
+
+// Reports
+router.get('/reports', requireAuth, requireAdmin, getReports);
+router.patch('/reports/:id/status', requireAuth, requireAdmin, updateReportStatus);
 
 // @route   PATCH /api/admin/users/:id
 router.patch('/users/:id', requireAuth, requireAdmin, updateUserByAdmin);
