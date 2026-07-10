@@ -62,7 +62,8 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
       return daysUntil <= 7;
     }).length;
 
-    const totalUnread = pendingApprovals + pendingPayments + unresolvedEnquiries + pendingStories + recentConnections;
+    // Only items requiring direct Admin action contribute to the totalUnread count
+    const totalUnread = pendingApprovals + pendingPayments + unresolvedEnquiries + pendingStories;
 
     res.json({
       totalUnread,
@@ -72,8 +73,8 @@ export const getAdminNotifications = async (req: Request, res: Response) => {
         pendingPayments: { count: pendingPayments, label: 'Payments to verify', tab: 'payments', urgent: pendingPayments > 0 },
         unresolvedEnquiries: { count: unresolvedEnquiries, label: 'Unresolved enquiries', tab: 'enquiries', urgent: unresolvedEnquiries > 0 },
         pendingStories: { count: pendingStories, label: 'Stories awaiting review', tab: 'stories', urgent: pendingStories > 0 },
-        recentConnections: { count: recentConnections, label: 'Connections this week', tab: 'connections', urgent: recentConnections > 0 },
-        upcomingBirthdays: { count: birthdayCount, label: 'Birthdays this week', tab: 'birthdays', urgent: birthdayCount > 0 },
+        recentConnections: { count: recentConnections, label: 'Connections this week', tab: 'connections', urgent: false },
+        upcomingBirthdays: { count: birthdayCount, label: 'Birthdays this week', tab: 'birthdays', urgent: false },
       }
     });
   } catch (error) {
