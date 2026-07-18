@@ -21,7 +21,9 @@ import {
   getProfitStats,
   getAllUsersWithLocation,
   getReports,
-  updateReportStatus
+  updateReportStatus,
+  resetUserPassword,
+  getAdminAuditLogs
 } from '../controllers/admin.controller';
 import { getAdminNotifications } from '../controllers/notification.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
@@ -52,6 +54,12 @@ router.patch('/reports/:id/status', requireAuth, requireAdmin, updateReportStatu
 
 // @route   PATCH /api/admin/users/:id
 router.patch('/users/:id', requireAuth, requireAdmin, updateUserByAdmin);
+
+// @route   POST /api/admin/users/:id/reset-password
+router.post('/users/:id/reset-password', requireAuth, requireAdmin, resetUserPassword);
+
+// Audit Logs
+router.get('/audit-logs', requireAuth, requireAdmin, getAdminAuditLogs);
 
 // @route   POST /api/admin/approve
 router.post('/approve', requireAuth, requireAdmin, approveUser);

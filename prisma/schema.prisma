@@ -458,3 +458,16 @@ model Report {
   @@index([reportedUserId])
   @@index([status])
 }
+
+model AdminAuditLog {
+  id           String   @id @default(uuid())
+  adminId      String
+  targetUserId String
+  action       String   // PASSWORD_RESET, OFFLINE_USER_CREATED, etc.
+  details      String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetUserId])
+  @@index([action, createdAt(sort: Desc)])
+}

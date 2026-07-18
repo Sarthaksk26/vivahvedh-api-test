@@ -172,6 +172,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   });
 
   if (!user) {
+    console.log(`[LOGIN FAILED] User not found for identifier: ${identifier}`);
     res.status(401).json({ error: 'Invalid credentials.' });
     return;
   }
@@ -185,7 +186,14 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {
+    console.log(`[LOGIN FAILED] Password mismatch for identifier: ${identifier}`);
     res.status(401).json({ error: 'Invalid credentials.' });
+    return;
+  }
+
+  // If password is correct but account is pending approval
+  if (user.accountStatus === 'INACTIVE') {
+    res.status(403).json({ error: 'Your account is pending approval. Please wait for our team to verify your profile.' });
     return;
   }
 

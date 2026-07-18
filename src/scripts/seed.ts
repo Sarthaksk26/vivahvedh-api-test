@@ -1,8 +1,6 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../config/db';
 import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
 
 async function seed() {
   console.log('🌱 Seeding test accounts...\n');

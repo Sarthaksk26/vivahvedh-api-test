@@ -19,11 +19,19 @@ export const getPendingApprovals = asyncHandler(async (req: Request, res: Respon
 });
 
 export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
-  const { q, gender, ageMin, ageMax, accountStatus } = req.query;
+  const { q, gender, ageMin, ageMax, accountStatus, planType } = req.query;
 
   let baseWhere: any = {
     role: 'USER',
   };
+
+  if (planType) {
+    if (planType === 'PAID') {
+      baseWhere.planType = { in: ['SILVER', 'GOLD'] };
+    } else {
+      baseWhere.planType = 'FREE';
+    }
+  }
 
   if (accountStatus) {
     baseWhere.accountStatus = String(accountStatus).toUpperCase();
@@ -279,7 +287,7 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
       password: hashedPassword,
       accountStatus: 'ACTIVE',
       planType: 'FREE',
-      requiresPasswordChange: true,
+      requiresPasswordChange: false,
       profileCreatedBy: validatedData.profileCreatedBy || 'Marriage Bureau',
       profile: {
         create: {
@@ -296,11 +304,101 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
   sendOfflineCredentialsEmail(emailLower, validatedData.firstName, newRegId, tempPassword)
     .catch((err: Error) => console.error(`[Mail] Offline credentials failed for ${emailLower}:`, err.message));
 
+  const adminId = req.user?.id;
+  if (adminId) {
+    await prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        targetUserId: newUser.id,
+        action: 'OFFLINE_USER_CREATED',
+        details: 'Admin created an offline profile'
+      }
+    });
+  }
+
   res.status(201).json({
     message: `Profile created successfully. Login credentials have been sent to ${validatedData.email}.`,
     regId: newUser.regId,
-    userName: `${validatedData.firstName} ${validatedData.lastName}`
+    userName: `${validatedData.firstName} ${validatedData.lastName}`,
+    tempPassword
   });
+});
+
+export const resetUserPassword = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user?.id;
+  const targetUserId = String(req.params.id);
+
+  if (!adminId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!targetUser) {
+    res.status(404).json({ error: 'User not found.' });
+    return;
+  }
+
+  if (targetUser.role === 'ADMIN') {
+    res.status(403).json({ error: 'Cannot reset password for an admin.' });
+    return;
+  }
+
+  const tempPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12);
+  const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: {
+      password: hashedPassword,
+      requiresPasswordChange: false
+    }
+  });
+
+  await prisma.refreshToken.deleteMany({
+    where: { userId: targetUserId }
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminId,
+      targetUserId,
+      action: 'PASSWORD_RESET',
+      details: 'Admin generated a temporary password'
+    }
+  });
+
+  res.status(200).json({
+    message: 'Temporary password generated successfully.',
+    tempPassword
+  });
+});
+
+export const getAdminAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+  const logs = await prisma.adminAuditLog.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+
+  // Fetch admin and target user details for the logs
+  const adminIds = [...new Set(logs.map(log => log.adminId))];
+  const targetUserIds = [...new Set(logs.map(log => log.targetUserId))];
+  
+  const [admins, targetUsers] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: adminIds } }, select: { id: true, profile: { select: { firstName: true, lastName: true } } } }),
+    prisma.user.findMany({ where: { id: { in: targetUserIds } }, select: { id: true, profile: { select: { firstName: true, lastName: true } } } })
+  ]);
+
+  const adminMap = new Map(admins.map(a => [a.id, a.profile ? `${a.profile.firstName} ${a.profile.lastName}` : 'Admin']));
+  const targetUserMap = new Map(targetUsers.map(u => [u.id, u.profile ? `${u.profile.firstName} ${u.profile.lastName}` : 'User']));
+
+  const enrichedLogs = logs.map(log => ({
+    ...log,
+    adminName: adminMap.get(log.adminId) || 'Unknown Admin',
+    targetUserName: targetUserMap.get(log.targetUserId) || 'Unknown User'
+  }));
+
+  res.status(200).json(enrichedLogs);
 });
 
 export const getAdminStats = asyncHandler(async (req: Request, res: Response) => {

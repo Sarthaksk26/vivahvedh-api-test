@@ -312,9 +312,10 @@ export const executeSearch = async (req: Request, res: Response) => {
       const sameUser = user.id === req.user?.id;
       const safeQuery = maskPrivateDetails(user as any, sameUser) as Record<string, any>;
 
-      // Guest users only see surname
+      // Guest users only see initial of first name
       if (!req.user && safeQuery.profile) {
-        safeQuery.profile.firstName = '***';
+        const initial = safeQuery.profile.firstName ? safeQuery.profile.firstName.charAt(0) + '.' : '';
+        safeQuery.profile.firstName = initial;
       }
 
       // Attach match score for authenticated users

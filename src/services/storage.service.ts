@@ -14,21 +14,29 @@ const missingCloudinaryVars = REQUIRED_CLOUDINARY_VARS.filter(
   (key) => !process.env[key]
 );
 
-if (missingCloudinaryVars.length > 0) {
-  // Fail fast at module load — never fall back to local disk silently.
+const isDev = process.env.NODE_ENV !== 'production';
+
+if (missingCloudinaryVars.length > 0 && !isDev) {
+  // Fail fast at module load — never fall back to local disk silently in production.
   throw new Error(
     `[StorageService] FATAL: Cloudinary is required but the following environment ` +
       `variables are missing: ${missingCloudinaryVars.join(', ')}. ` +
       `Set them and restart the server. Local-disk storage is disabled because ` +
       `it does not persist across cold starts in serverless deployments.`
   );
+} else if (missingCloudinaryVars.length > 0) {
+  console.warn(
+    `[StorageService] Warning: Cloudinary is missing. Mock uploads will be used for development.`
+  );
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+if (missingCloudinaryVars.length === 0) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+}
 
 /**
  * Storage Service — Cloudinary only.
@@ -42,6 +50,10 @@ export class StorageService {
    * @returns Secure URL of the uploaded image
    */
   static async uploadImage(buffer: Buffer, filename: string): Promise<string> {
+    if (missingCloudinaryVars.length > 0) {
+      console.log(`[StorageService] Mock uploading image: ${filename}`);
+      return `https://images.unsplash.com/photo-1511795409834-ef04bbd61622?q=80&w=400&auto=format&fit=crop`; // Mock URL
+    }
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
@@ -74,6 +86,10 @@ export class StorageService {
    * @returns Secure URL of the uploaded document
    */
   static async uploadDocument(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
+    if (missingCloudinaryVars.length > 0) {
+      console.log(`[StorageService] Mock uploading document: ${filename}`);
+      return `https://example.com/mock-documents/${filename}`; // Mock URL
+    }
     const isImage = mimeType.startsWith('image/');
     const options: Record<string, unknown> = {
       folder: 'vivahvedh/documents',
@@ -107,6 +123,10 @@ export class StorageService {
    * @param url Secure URL or public_id of the image
    */
   static async deleteImage(url: string): Promise<void> {
+    if (missingCloudinaryVars.length > 0) {
+      console.log(`[StorageService] Mock deleting image: ${url}`);
+      return;
+    }
     // Only initiate deletion for actual Cloudinary URLs; ignore other values
     // (e.g. legacy relative paths) rather than crashing.
     if (!url || !url.includes('cloudinary.com')) {
