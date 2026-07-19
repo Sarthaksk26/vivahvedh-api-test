@@ -1,19 +1,56 @@
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
-// Create a reusable transporter using exactly what we specify in .env
-// We default to a silent fail-catcher if env variables are missing so the app doesn't crash during development
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER || '', 
-    pass: process.env.SMTP_PASS || '', 
-  },
-  connectionTimeout: 5000, // 5 seconds
-  greetingTimeout: 5000,   // 5 seconds
-  socketTimeout: 5000,     // 5 seconds
-});
+// ═══════════════════════════════════════════════════════════════════
+//  EMAIL TRANSPORTER — Environment-Aware Setup
+//
+//  Modes:
+//  1) PRODUCTION  — Uses real SMTP credentials from .env (Gmail, SendGrid, etc.)
+//  2) TEST/DEV    — Uses Ethereal (fake inbox) when EMAIL_TEST=true in .env
+//  3) FALLBACK    — Console-logs emails when no SMTP_USER is configured
+//
+//  See EMAIL_SETUP.md for full configuration guide.
+// ═══════════════════════════════════════════════════════════════════
+
+let transporter: Transporter;
+let etherealPreviewUrl: string | null = null;
+
+function createProductionTransporter(): Transporter {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER || '',
+      pass: process.env.SMTP_PASS || '',
+    },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
+  });
+}
+
+async function createEtherealTransporter(): Promise<Transporter> {
+  const testAccount = await nodemailer.createTestAccount();
+  console.log(`📧 [Ethereal] Test inbox created:`);
+  console.log(`   User: ${testAccount.user}`);
+  console.log(`   Pass: ${testAccount.pass}`);
+  console.log(`   View sent emails at: https://ethereal.email/login`);
+  return nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: { user: testAccount.user, pass: testAccount.pass },
+  });
+}
+
+// Initialize synchronously for production; async Ethereal is handled lazily
+if (process.env.EMAIL_TEST === 'true') {
+  // Lazy-init: will be set before first send
+  transporter = null as any;
+} else {
+  transporter = createProductionTransporter();
+}
 
 export function escapeHTML(text: string): string {
   if (!text) return '';
@@ -26,26 +63,52 @@ export function escapeHTML(text: string): string {
 }
 
 export const sendMail = async (to: string, subject: string, htmlContent: string) => {
-  if (!process.env.SMTP_USER) {
+  // ── Fallback: Console-log when SMTP is not configured ──
+  if (!process.env.SMTP_USER && process.env.EMAIL_TEST !== 'true') {
     console.warn(`⚠️ Mail Module Skipped: SMTP_USER not configured. Would have sent "${subject}" to ${to}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📋 [Dev Console Email Preview]`);
+      console.log(`   To: ${to}`);
+      console.log(`   Subject: ${subject}`);
+      console.log(`   Body length: ${htmlContent.length} chars`);
+    }
     return;
   }
 
+  // ── Lazy-init Ethereal transporter for testing ──
+  if (process.env.EMAIL_TEST === 'true' && !transporter) {
+    transporter = await createEtherealTransporter();
+  }
+
   try {
+    const fromAddress = process.env.EMAIL_TEST === 'true'
+      ? '"Vivahvedh Test" <test@vivahvedh.com>'
+      : `"Vivahvedh Matrimony" <${process.env.SMTP_USER}>`;
+
     const info = await transporter.sendMail({
-      from: `"Vivahvedh Matrimony" <${process.env.SMTP_USER}>`,
+      from: fromAddress,
       to,
       subject,
       html: htmlContent,
     });
+
     console.log(`✉️ Email securely sent: [${info.messageId}] to ${to}`);
+
+    // If using Ethereal, log preview URL
+    if (process.env.EMAIL_TEST === 'true') {
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      if (previewUrl) {
+        console.log(`🔗 [Ethereal Preview] ${previewUrl}`);
+        etherealPreviewUrl = previewUrl as string;
+      }
+    }
   } catch (error: any) {
     console.error('❌ Email send failed:', {
       to,
       subject,
       error: error.message,
       code: error.code,
-      hint: error.code === 'ECONNREFUSED' 
+      hint: error.code === 'ECONNREFUSED'
         ? 'Check SMTP_HOST and SMTP_PORT settings'
         : error.code === 'EAUTH'
         ? 'Check SMTP_USER and SMTP_PASS — authentication failed'
@@ -55,6 +118,9 @@ export const sendMail = async (to: string, subject: string, htmlContent: string)
     throw error;
   }
 };
+
+/** Returns the last Ethereal preview URL (useful for test assertions) */
+export const getLastEtherealPreviewUrl = () => etherealPreviewUrl;
 
 // =====================================
 // High-Impact Email Templates
