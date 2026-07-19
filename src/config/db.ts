@@ -131,34 +131,30 @@ if (isPIIEncryptionConfigured()) {
   // ── 3. Decrypt on Read Operations ──
   prisma.$use(async (params: Prisma.MiddlewareParams, next: (params: Prisma.MiddlewareParams) => Promise<any>) => {
     const result = await next(params);
-    const model = params.model;
 
-    if (!model || !ENCRYPTED_MODELS.has(model)) return result;
-
-    const readActions = ['findUnique', 'findFirst', 'findMany', 'create', 'update', 'upsert'];
-    if (!readActions.includes(params.action)) return result;
-
-    const fields = ENCRYPTED_FIELDS[model];
-    if (!fields) return result;
-
-    const decryptData = (data: Record<string, any>) => {
+    const decryptRecursive = (data: any): any => {
       if (!data) return data;
-      for (const field of fields) {
-        if (data[field] && typeof data[field] === 'string') {
-          data[field] = decryptPII(data[field]);
+      if (Array.isArray(data)) {
+        return data.map(decryptRecursive);
+      }
+      if (typeof data === 'object') {
+        if (data instanceof Date) return data;
+        for (const key of Object.keys(data)) {
+          if (
+            (key === 'mobile' || key === 'email' || key === 'kycDocumentUrl' || 
+             key === 'incomeProofUrl' || key === 'medicalReportUrl') && 
+            typeof data[key] === 'string'
+          ) {
+            data[key] = decryptPII(data[key]);
+          } else {
+            data[key] = decryptRecursive(data[key]);
+          }
         }
       }
       return data;
     };
 
-    if (Array.isArray(result)) {
-      return result.map(decryptData);
-    }
-    if (result && typeof result === 'object') {
-      return decryptData(result);
-    }
-
-    return result;
+    return decryptRecursive(result);
   });
 } else {
   console.warn('[PII] PII_ENCRYPTION_KEY not configured. Sensitive fields stored in plaintext.');
