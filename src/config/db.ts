@@ -18,7 +18,7 @@ const prisma = new PrismaClient();
 
 // Fields to encrypt per model
 const ENCRYPTED_FIELDS: Record<string, string[]> = {
-  User: ['mobile', 'email', 'kycDocumentUrl'],
+  User: ['mobile', 'email', 'kycDocumentUrl', 'kycNumber'],
   UserEducation: ['incomeProofUrl'],
   UserPhysical: ['medicalReportUrl'],
 };
@@ -142,7 +142,7 @@ if (isPIIEncryptionConfigured()) {
         for (const key of Object.keys(data)) {
           if (
             (key === 'mobile' || key === 'email' || key === 'kycDocumentUrl' || 
-             key === 'incomeProofUrl' || key === 'medicalReportUrl') && 
+             key === 'incomeProofUrl' || key === 'medicalReportUrl' || key === 'kycNumber') && 
             typeof data[key] === 'string'
           ) {
             data[key] = decryptPII(data[key]);

@@ -256,7 +256,9 @@ const createOfflineUserSchema = z.object({
   email: z.string().email().max(254).toLowerCase(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']),
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
-  profileCreatedBy: z.enum(['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau']).optional()
+  profileCreatedBy: z.enum(['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau']).optional(),
+  kycType: z.enum(['AADHAR', 'PAN']),
+  kycNumber: z.string().min(10, 'KYC Number must be at least 10 characters long')
 }).strict();
 
 export const createOfflineUser = asyncHandler(async (req: Request, res: Response) => {
@@ -289,6 +291,8 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
       planType: 'FREE',
       requiresPasswordChange: false,
       profileCreatedBy: validatedData.profileCreatedBy || 'Marriage Bureau',
+      kycType: validatedData.kycType,
+      kycNumber: validatedData.kycNumber,
       profile: {
         create: {
           firstName: validatedData.firstName,

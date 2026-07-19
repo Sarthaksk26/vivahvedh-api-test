@@ -108,6 +108,7 @@ const addressSchema = z.object({
 const updateProfileBodySchema = z.object({
   user:        z.object({
                  kycType: z.enum(['AADHAR', 'PAN', 'PASSPORT']).optional().nullable(),
+                 kycNumber: z.string().optional().nullable(),
                }).strict().optional(),
   profile:     profileSchema.optional(),
   family:      familySchema.optional(),

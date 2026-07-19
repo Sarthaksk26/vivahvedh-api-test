@@ -34,7 +34,9 @@ const registerSchema = z.object({
     const dob = new Date(`${val.slice(0, 10)}T12:00:00Z`);
     return !isNaN(dob.getTime());
   }, { message: 'Date of Birth is required and must be a valid date.' }),
-  profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional()
+  profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional(),
+  kycType: z.enum(['AADHAR', 'PAN']),
+  kycNumber: z.string().min(10, 'KYC Number must be at least 10 characters long')
 }).strict().refine((data) => {
   const dob = new Date(`${data.birthDate.slice(0, 10)}T12:00:00Z`);
   const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
@@ -112,6 +114,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       password: hashedPassword,
       accountStatus: 'INACTIVE',
       profileCreatedBy: validatedData.profileCreatedBy || null,
+      kycType: validatedData.kycType,
+      kycNumber: validatedData.kycNumber,
       profile: {
         create: {
           firstName: validatedData.firstName,

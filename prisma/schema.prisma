@@ -25,6 +25,7 @@ model User {
   planType               PlanType          @default(FREE)
   planExpiresAt          DateTime?
   kycDocumentUrl         String?
+  kycNumber              String?
   kycType                KYCType?
   kycVerified            Boolean           @default(false)
   images                 Image[]
