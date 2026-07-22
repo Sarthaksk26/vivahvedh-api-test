@@ -117,7 +117,27 @@ const updateProfileBodySchema = z.object({
   astrology:   astrologySchema.optional(),
   preferences: preferencesSchema.optional(),
   addresses:   addressSchema.optional(),
-}).strict();
+}).strict().superRefine((data, ctx) => {
+  if (data.user?.kycNumber) {
+    const kNumber = data.user.kycNumber.trim();
+    if (kNumber) {
+      const kType = data.user.kycType || 'AADHAR';
+      if (kType === 'AADHAR' && !/^\d{12}$/.test(kNumber)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Aadhaar number must be exactly 12 digits (numbers only).',
+          path: ['user', 'kycNumber']
+        });
+      } else if (kType === 'PAN' && !/^[A-Za-z0-9]{10}$/.test(kNumber)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'PAN number must be exactly 10 characters (e.g. ABCDE1234F).',
+          path: ['user', 'kycNumber']
+        });
+      }
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // Safe file-path helper — prevents path-traversal attacks

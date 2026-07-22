@@ -258,8 +258,26 @@ const createOfflineUserSchema = z.object({
   maritalStatus: z.enum(['UNMARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED']),
   profileCreatedBy: z.enum(['Self', 'Father', 'Mother', 'Sibling', 'Relative', 'Friend', 'Marriage Bureau']).optional(),
   kycType: z.enum(['AADHAR', 'PAN']),
-  kycNumber: z.string().min(10, 'KYC Number must be at least 10 characters long')
-}).strict();
+  kycNumber: z.string().min(1, 'KYC Number is required')
+}).strict().superRefine((data, ctx) => {
+  if (data.kycType === 'AADHAR') {
+    if (!/^\d{12}$/.test(data.kycNumber.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Aadhaar number must be exactly 12 digits (numbers only).',
+        path: ['kycNumber']
+      });
+    }
+  } else if (data.kycType === 'PAN') {
+    if (!/^[A-Za-z0-9]{10}$/.test(data.kycNumber.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PAN number must be exactly 10 characters (e.g. ABCDE1234F).',
+        path: ['kycNumber']
+      });
+    }
+  }
+});
 
 export const createOfflineUser = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = createOfflineUserSchema.parse(req.body);

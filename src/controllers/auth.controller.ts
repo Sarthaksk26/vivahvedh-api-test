@@ -36,14 +36,42 @@ const registerSchema = z.object({
   }, { message: 'Date of Birth is required and must be a valid date.' }),
   profileCreatedBy: z.enum(PROFILE_CREATED_BY_OPTIONS).optional(),
   kycType: z.enum(['AADHAR', 'PAN']),
-  kycNumber: z.string().min(10, 'KYC Number must be at least 10 characters long')
-}).strict().refine((data) => {
+  kycNumber: z.string().min(1, 'KYC Number is required')
+}).strict().superRefine((data, ctx) => {
   const dob = new Date(`${data.birthDate.slice(0, 10)}T12:00:00Z`);
   const age = (Date.now() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-  if (data.gender === 'MALE' && age < 21) return false;
-  if (data.gender === 'FEMALE' && age < 18) return false;
-  return true;
-}, { message: 'Legal marriage age in India is 21+ for Men and 18+ for Women.', path: ['birthDate'] });
+  if (data.gender === 'MALE' && age < 21) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Legal marriage age in India is 21+ for Men and 18+ for Women.',
+      path: ['birthDate']
+    });
+  } else if (data.gender === 'FEMALE' && age < 18) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Legal marriage age in India is 21+ for Men and 18+ for Women.',
+      path: ['birthDate']
+    });
+  }
+
+  if (data.kycType === 'AADHAR') {
+    if (!/^\d{12}$/.test(data.kycNumber.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Aadhaar number must be exactly 12 digits (numbers only).',
+        path: ['kycNumber']
+      });
+    }
+  } else if (data.kycType === 'PAN') {
+    if (!/^[A-Za-z0-9]{10}$/.test(data.kycNumber.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PAN number must be exactly 10 characters (e.g. ABCDE1234F).',
+        path: ['kycNumber']
+      });
+    }
+  }
+});
 
 const loginSchema = z.object({
   identifier: z.string().min(3).max(254).trim(),

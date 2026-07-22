@@ -72,6 +72,8 @@ describe('auth.controller', () => {
           maritalStatus: 'UNMARRIED',
           email: 'john@example.com',
           birthDate: birthDateStr,
+          kycType: 'AADHAR',
+          kycNumber: '123456789012',
         }
       };
       const res = mockRes();
@@ -102,6 +104,8 @@ describe('auth.controller', () => {
           maritalStatus: 'UNMARRIED',
           email: 'jane@example.com',
           birthDate: birthDateStr,
+          kycType: 'AADHAR',
+          kycNumber: '123456789012',
         }
       };
       const res = mockRes();
@@ -135,6 +139,8 @@ describe('auth.controller', () => {
           maritalStatus: 'UNMARRIED',
           email: 'john@example.com',
           birthDate: birthDateStr,
+          kycType: 'AADHAR',
+          kycNumber: '123456789012',
         }
       };
       const res = mockRes();
