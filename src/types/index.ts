@@ -50,6 +50,8 @@ export interface LoginResponseUser {
 export interface LoginResponse {
   message: string;
   user: LoginResponseUser;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 export interface ImageDTO {

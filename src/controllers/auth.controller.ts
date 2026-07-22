@@ -85,7 +85,7 @@ const loginSchema = z.object({
 async function issueDualTokens(
   res: Response,
   payload: AccessTokenPayload
-): Promise<void> {
+): Promise<{ accessToken: string; refreshToken: string }> {
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken({ id: payload.id });
 
@@ -99,6 +99,7 @@ async function issueDualTokens(
   });
 
   setAuthCookies(res, accessToken, refreshToken);
+  return { accessToken, refreshToken };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -239,7 +240,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   };
 
   // Issue dual tokens and set HttpOnly cookies
-  await issueDualTokens(res, tokenPayload);
+  const { accessToken, refreshToken } = await issueDualTokens(res, tokenPayload);
 
   // Response contains NO tokens — they are in HttpOnly cookies
   const responseBody: LoginResponse = {
@@ -251,6 +252,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       planType: user.planType,
       requiresPasswordChange: user.requiresPasswordChange,
     },
+    accessToken,
+    refreshToken,
   };
 
   res.status(200).json(responseBody);
@@ -261,7 +264,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════
 
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
-  const refreshCookie = req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
+  // Try to get token from body first (frontend fallback), then from cookies
+  const refreshCookie = req.body?.refreshToken || req.cookies?.[REFRESH_TOKEN_COOKIE];
 
   if (!refreshCookie) {
     res.status(401).json({ error: 'No refresh token provided.' });
@@ -376,10 +380,10 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     requiresPasswordChange: user.requiresPasswordChange,
   };
 
-  await issueDualTokens(res, tokenPayload);
+  const { accessToken, refreshToken: newRefreshToken } = await issueDualTokens(res, tokenPayload);
 
   res.status(200).json({
-    message: 'Tokens refreshed.',
+    message: 'Token refreshed.',
     user: {
       regId: user.regId,
       role: user.role,
@@ -387,6 +391,8 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
       planType: user.planType,
       requiresPasswordChange: user.requiresPasswordChange,
     },
+    accessToken,
+    refreshToken: newRefreshToken,
   });
 });
 
@@ -395,7 +401,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  const refreshCookie = req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
+  const refreshCookie = req.body?.refreshToken || req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
 
   if (refreshCookie) {
     // Remove the specific token from DB
