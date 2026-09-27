@@ -3,11 +3,28 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import prisma from '../config/db';
 import { z } from 'zod';
-import { sendApprovalEmail, sendOfflineCredentialsEmail, sendEnquiryReplyEmail } from '../services/mail.service';
+import { sendApprovalEmail, sendPasswordResetEmail, sendEnquiryReplyEmail } from '../services/mail.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import { AppError } from '../utils/AppError';
 
 import { generateUniqueRegId } from '../utils/id.util';
+
+async function issuePasswordResetToken(userId: string): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const token = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  await prisma.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+  await prisma.passwordResetToken.create({
+    data: { userId, token, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+  });
+  return rawToken;
+}
+
+function passwordResetLink(rawToken: string): string {
+  const clientUrl = process.env.CLIENT_URL;
+  if (!clientUrl) throw new AppError('CLIENT_URL is not configured.', 500);
+  return `${clientUrl.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+}
 
 export const getPendingApprovals = asyncHandler(async (req: Request, res: Response) => {
   const pendingUsers = await prisma.user.findMany({
@@ -96,7 +113,10 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
 export const approveUser = asyncHandler(async (req: Request, res: Response) => {
   const { targetUserId } = req.body;
 
-  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: { profile: { select: { firstName: true } } },
+  });
   if (!targetUser) {
     res.status(404).json({ error: 'User not found.' });
     return;
@@ -295,8 +315,7 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
     return;
   }
 
-  const tempPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12);
-  const hashedPassword = await bcrypt.hash(tempPassword, 10);
+  const hashedPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
   const newRegId = await generateUniqueRegId();
 
   const newUser = await prisma.user.create({
@@ -307,7 +326,7 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
       password: hashedPassword,
       accountStatus: 'ACTIVE',
       planType: 'FREE',
-      requiresPasswordChange: false,
+      requiresPasswordChange: true,
       profileCreatedBy: validatedData.profileCreatedBy || 'Marriage Bureau',
       kycType: validatedData.kycType,
       kycNumber: validatedData.kycNumber,
@@ -323,8 +342,8 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
     include: { profile: true }
   });
 
-  sendOfflineCredentialsEmail(emailLower, validatedData.firstName, newRegId, tempPassword)
-    .catch((err: Error) => console.error(`[Mail] Offline credentials failed for ${emailLower}:`, err.message));
+  const activationToken = await issuePasswordResetToken(newUser.id);
+  await sendPasswordResetEmail(emailLower, validatedData.firstName, passwordResetLink(activationToken));
 
   const adminId = req.user?.id;
   if (adminId) {
@@ -339,10 +358,9 @@ export const createOfflineUser = asyncHandler(async (req: Request, res: Response
   }
 
   res.status(201).json({
-    message: `Profile created successfully. Login credentials have been sent to ${validatedData.email}.`,
+    message: `Profile created successfully. A secure activation link has been sent to ${validatedData.email}.`,
     regId: newUser.regId,
     userName: `${validatedData.firstName} ${validatedData.lastName}`,
-    tempPassword
   });
 });
 
@@ -355,7 +373,7 @@ export const resetUserPassword = asyncHandler(async (req: Request, res: Response
     return;
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, include: { profile: true } });
   if (!targetUser) {
     res.status(404).json({ error: 'User not found.' });
     return;
@@ -366,20 +384,31 @@ export const resetUserPassword = asyncHandler(async (req: Request, res: Response
     return;
   }
 
-  const tempPassword = crypto.randomBytes(8).toString('base64url').slice(0, 12);
-  const hashedPassword = await bcrypt.hash(tempPassword, 10);
+  if (!targetUser.email) {
+    res.status(400).json({ error: 'This member has no email address. Verify their identity, update a verified email, then resend activation.' });
+    return;
+  }
+
+  const hashedPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
 
   await prisma.user.update({
     where: { id: targetUserId },
     data: {
       password: hashedPassword,
-      requiresPasswordChange: false
+      requiresPasswordChange: true
     }
   });
 
   await prisma.refreshToken.deleteMany({
     where: { userId: targetUserId }
   });
+
+  const resetToken = await issuePasswordResetToken(targetUserId);
+  await sendPasswordResetEmail(
+    targetUser.email,
+    targetUser.profile?.firstName || 'Member',
+    passwordResetLink(resetToken),
+  );
 
   await prisma.adminAuditLog.create({
     data: {
@@ -391,8 +420,7 @@ export const resetUserPassword = asyncHandler(async (req: Request, res: Response
   });
 
   res.status(200).json({
-    message: 'Temporary password generated successfully.',
-    tempPassword
+    message: 'A secure password-reset link has been sent to the member.'
   });
 });
 

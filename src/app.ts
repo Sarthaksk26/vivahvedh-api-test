@@ -17,10 +17,17 @@ import { errorHandler } from './middleware/error.middleware';
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || '')
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
+const allowedOrigins = configuredOrigins.length > 0
+  ? configuredOrigins
+  : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173']);
+
+if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+  throw new Error('FATAL: CORS_ORIGINS must list the approved frontend origin(s) in production.');
+}
 
 // 1. Trust proxy for Render/Cloudflare deployment (MUST be first)
 app.set('trust proxy', 1);
@@ -34,7 +41,7 @@ app.use(cors({
       return;
     }
 
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
       return;
     }
@@ -58,15 +65,20 @@ app.use((req, res, next) => {
   const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
   if (safeMethods.includes(req.method)) return next();
 
-  // Non-browser clients (cURL, Postman, server-to-server) send no Origin — allow
   const origin = req.headers['origin'] as string | undefined;
   const referer = req.headers['referer'] as string | undefined;
 
-  if (!origin && !referer) return next();
+  if (!origin && !referer) {
+    if (process.env.NODE_ENV === 'production') {
+      res.status(403).json({ error: 'Forbidden: Origin validation required.' });
+      return;
+    }
+    return next();
+  }
 
   // Validate Origin header first, then fall back to Referer
   if (origin) {
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin)) {
       return next();
     }
     console.warn(`[CSRF] Blocked request from origin: ${origin} to ${req.method} ${req.originalUrl}`);
@@ -78,7 +90,7 @@ app.use((req, res, next) => {
   if (referer) {
     try {
       const refererOrigin = new URL(referer).origin;
-      if (allowedOrigins.length === 0 || allowedOrigins.includes(refererOrigin)) {
+      if (allowedOrigins.includes(refererOrigin)) {
         return next();
       }
     } catch {

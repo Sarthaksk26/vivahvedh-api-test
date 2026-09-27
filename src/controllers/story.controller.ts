@@ -116,7 +116,7 @@ export const reviewStory = asyncHandler(async (req: Request, res: Response) => {
 // ==============================
 export const createStory = asyncHandler(async (req: Request, res: Response) => {
   const validatedData = submitStorySchema.parse(req.body); // Reusing schema
-  const photoUrl = req.file ? `/uploads/${req.file.filename}` : null;
+  const photoUrl = req.file ? req.file.path : null;
 
   const story = await prisma.successStory.create({
     data: {

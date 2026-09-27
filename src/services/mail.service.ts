@@ -498,3 +498,37 @@ export const sendAdminNotification = async (event: string, details: string) => {
   
   await sendMail(adminEmail, `[Vivahvedh Admin] ${safeEvent}`, html);
 };
+
+export const sendMigrationNotificationEmail = async (to: string, name: string) => {
+  const safeName = escapeHTML(name);
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; padding: 40px; max-width: 600px; margin: 0 auto;">
+      <div style="text-align: center; border-bottom: 3px solid #e11d48; padding-bottom: 20px; margin-bottom: 30px;">
+        <h1 style="color: #e11d48; margin-bottom: 5px;">Welcome to the New Vivahvedh! 🎉</h1>
+      </div>
+      
+      <p style="font-size: 16px;">Namaste <b>${safeName}</b>,</p>
+      <p>We are thrilled to announce that Vivahvedh has upgraded to a brand new, faster, and more secure platform!</p>
+      <p>Your profile and all your details have been safely migrated to our new system.</p>
+      
+      <div style="background: #f8f9fa; border: 2px solid #e11d48; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+        <p style="margin: 0 0 12px;"><b style="color: #666;">How to Login:</b></p>
+        <p style="font-size: 16px; margin: 0;">Simply login using your existing <b>Mobile Number or RegID</b> and your <b>existing password</b>.</p>
+      </div>
+      
+      <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; border-radius: 4px; margin: 20px 0;">
+        <p style="margin: 0; font-weight: bold; color: #856404;">⚠️ Security Notice: For your security, you will be prompted to update your password immediately upon your first login on the new platform.</p>
+      </div>
+      
+      <a href="${process.env.CLIENT_URL || '#'}/login" style="background-color: #e11d48; color: white; padding: 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; text-align: center; width: 100%; box-sizing: border-box;">
+        Login Now →
+      </a>
+      
+      <div style="margin-top: 40px; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px; text-align: center;">
+        <p>© ${new Date().getFullYear()} Vivahvedh Matrimonial</p>
+      </div>
+    </div>
+  `;
+  await sendMail(to, `Important: Welcome to the New Vivahvedh Platform`, html);
+};
+

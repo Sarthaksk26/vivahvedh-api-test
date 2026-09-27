@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
+import { requireAuth, requireAdmin, requireActiveAccount, requireActivePassword } from '../middleware/auth.middleware';
 import { upload, processImage } from '../config/multer';
 import {
   getApprovedStories,
@@ -17,21 +17,21 @@ const router = Router();
 router.get('/', getApprovedStories);
 
 // USER: Submit a story (with optional photo)
-router.post('/submit', requireAuth, upload.single('photo'), processImage, submitStory);
+router.post('/submit', requireAuth, requireActivePassword, requireActiveAccount, upload.single('photo'), processImage, submitStory);
 
 // ADMIN: Get pending stories for review
-router.get('/admin/pending', requireAuth, requireAdmin, getPendingStories);
+router.get('/admin/pending', requireAuth, requireActiveAccount, requireAdmin, getPendingStories);
 
 // ADMIN: Get all stories
-router.get('/admin/all', requireAuth, requireAdmin, getAllStories);
+router.get('/admin/all', requireAuth, requireActiveAccount, requireAdmin, getAllStories);
 
 // ADMIN: Approve or reject a story
-router.post('/admin/review', requireAuth, requireAdmin, reviewStory);
+router.post('/admin/review', requireAuth, requireActiveAccount, requireAdmin, reviewStory);
 
 // ADMIN: Create a story directly (auto-approved)
-router.post('/admin/create', requireAuth, requireAdmin, upload.single('photo'), processImage, createStory);
+router.post('/admin/create', requireAuth, requireActiveAccount, requireAdmin, upload.single('photo'), processImage, createStory);
 
 // ADMIN: Delete a story
-router.delete('/admin/:id', requireAuth, requireAdmin, deleteStory);
+router.delete('/admin/:id', requireAuth, requireActiveAccount, requireAdmin, deleteStory);
 
 export default router;

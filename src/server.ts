@@ -9,7 +9,7 @@ const optionalButImportant = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'CLIENT_URL
 
 // In production, enforce additional security-critical env vars
 if (process.env.NODE_ENV === 'production') {
-  requiredEnvVars.push('PII_ENCRYPTION_KEY', 'JWT_REFRESH_SECRET');
+  requiredEnvVars.push('PII_ENCRYPTION_KEY', 'JWT_REFRESH_SECRET', 'CORS_ORIGINS', 'CLIENT_URL');
 }
 
 requiredEnvVars.forEach(key => {

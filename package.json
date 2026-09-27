@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.ts",
     "migrate": "ts-node src/scripts/migrate.ts",
+    "activation-campaign": "ts-node src/scripts/send-migration-activation.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -21,19 +22,18 @@
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "bcrypt": "^6.0.0",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.2",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.1.1",
-    "multer-storage-cloudinary": "^4.0.0",
-    "mysql2": "^3.22.5",
-    "nodemailer": "^8.0.5",
-    "sharp": "^0.34.5",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.4",
+    "nodemailer": "^10.0.10",
+    "sharp": "^0.35.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {

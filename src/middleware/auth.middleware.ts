@@ -17,19 +17,12 @@ declare global {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Extracts the access token from:
- *  1. HttpOnly cookie (primary — new flow)
- *  2. Authorization header (fallback — backward compat during migration)
+ * Extracts the access token from the HttpOnly cookie. Browser authentication
+ * deliberately has no JavaScript-readable token fallback.
  */
 const extractToken = (req: Request): string | null => {
-  // 1. Cookie-based (preferred)
   const cookieToken = req.cookies?.[ACCESS_TOKEN_COOKIE] as string | undefined;
   if (cookieToken) return cookieToken;
-
-  // 2. Bearer header fallback
-  const header = req.headers.authorization;
-  if (header && header.startsWith('Bearer ')) return header.split(' ')[1];
-
   return null;
 };
 
@@ -95,7 +88,7 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
 
 
 /** Requires `role === 'ADMIN'` on an already-authenticated request. */
-export const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   if (!req.user) {
     res.status(401).json({ error: 'Unauthorized.' });
     return;
@@ -104,7 +97,20 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
     res.status(403).json({ error: 'Forbidden. Admin elevation required.' });
     return;
   }
-  next();
+  try {
+    const prisma = (await import('../config/db')).default;
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { role: true, accountStatus: true },
+    });
+    if (!user || user.role !== 'ADMIN' || user.accountStatus !== 'ACTIVE') {
+      res.status(403).json({ error: 'Forbidden. Admin elevation required.' });
+      return;
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**

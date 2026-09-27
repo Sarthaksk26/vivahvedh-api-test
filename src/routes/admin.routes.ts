@@ -26,9 +26,12 @@ import {
   getAdminAuditLogs
 } from '../controllers/admin.controller';
 import { getAdminNotifications } from '../controllers/notification.controller';
-import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
+import { requireAuth, requireAdmin, requireActiveAccount, requireActivePassword } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// Revalidate account state and admin role before every privileged operation.
+router.use(requireAuth, requireActivePassword, requireActiveAccount, requireAdmin);
 
 // @route   GET /api/admin/stats
 router.get('/stats', requireAuth, requireAdmin, getAdminStats);

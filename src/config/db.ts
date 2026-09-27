@@ -21,6 +21,7 @@ const ENCRYPTED_FIELDS: Record<string, string[]> = {
   User: ['mobile', 'email', 'kycDocumentUrl', 'kycNumber'],
   UserEducation: ['incomeProofUrl'],
   UserPhysical: ['medicalReportUrl'],
+  PendingPayment: ['screenshotUrl'],
 };
 
 // Searchable fields that require deterministic symmetric encryption

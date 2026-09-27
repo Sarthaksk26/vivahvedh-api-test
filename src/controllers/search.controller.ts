@@ -103,6 +103,70 @@ function computeMatchScore(
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  Lookup Resolution Cache
+// ═══════════════════════════════════════════════════════════════════
+
+let lookupsCache: {
+  qualifications: Map<number, string>;
+  occupations: Map<number, string>;
+  religions: Map<number, string>;
+  castes: Map<number, string>;
+  subCastes: Map<number, string>;
+  districts: Map<number, string>;
+  lastFetched: number;
+} | null = null;
+
+const LAND_RANGES: Record<number, string> = {
+  0: 'Not Specified',
+  1: 'Below 1 acre',
+  2: '1 to 2 acres',
+  3: '2 to 3 acres',
+  4: '3 to 4 acres',
+  5: '4 to 5 acres',
+  6: '5 to 6 acres',
+  7: '6 to 7 acres',
+  8: '7 to 8 acres',
+  9: '8 to 9 acres',
+  10: '9 to 10 acres',
+  11: '10 to 11 acres',
+  12: '11 to 12 acres',
+  13: '12 to 13 acres',
+  14: '13 to 14 acres',
+  15: '14 to 15 acres',
+  16: '15 to 16 acres',
+  17: '16 to 17 acres',
+  18: '17 to 18 acres',
+  19: '18 to 19 acres',
+  20: '19 to 20 acres',
+  21: 'Above 20 acres',
+};
+
+async function getLookups() {
+  const now = Date.now();
+  if (lookupsCache && now - lookupsCache.lastFetched < 3600000) {
+    return lookupsCache;
+  }
+  const [quals, occs, religions, castes, subcastes, districts] = await Promise.all([
+    prisma.qualification.findMany(),
+    prisma.occupation.findMany(),
+    prisma.religion.findMany(),
+    prisma.caste.findMany(),
+    prisma.subCaste.findMany(),
+    prisma.district.findMany(),
+  ]);
+  lookupsCache = {
+    qualifications: new Map(quals.map(q => [q.id, q.name])),
+    occupations: new Map(occs.map(o => [o.id, o.type])),
+    religions: new Map(religions.map(r => [r.id, r.name])),
+    castes: new Map(castes.map(c => [c.id, c.name])),
+    subCastes: new Map(subcastes.map(s => [s.id, s.name])),
+    districts: new Map(districts.map(d => [d.id, d.name])),
+    lastFetched: now,
+  };
+  return lookupsCache;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  GET /api/search — Scored Matchmaking Search
 // ═══════════════════════════════════════════════════════════════════
 
@@ -307,7 +371,8 @@ export const executeSearch = async (req: Request, res: Response) => {
     // Sort by matchScore descending (stable sort preserves plan+date ordering for ties)
     scoredResults.sort((a, b) => b.matchScore - a.matchScore);
 
-    // ── Sanitize output ──────────────────────────────────────────
+    // ── Sanitize output and enrich with lookup names ──────────────
+    const lookups = await getLookups();
     const safeMatches = scoredResults.map(({ user, matchScore }) => {
       const sameUser = user.id === req.user?.id;
       const safeQuery = maskPrivateDetails(user as any, sameUser) as Record<string, any>;
@@ -315,12 +380,48 @@ export const executeSearch = async (req: Request, res: Response) => {
       // Guest users only see initial of first name
       if (!req.user && safeQuery.profile) {
         const initial = safeQuery.profile.firstName ? safeQuery.profile.firstName.charAt(0) + '.' : '';
-        safeQuery.profile.firstName = initial;
+        safeQuery.profile = {
+          firstName: initial,
+          gender: safeQuery.profile.gender,
+          maritalStatus: safeQuery.profile.maritalStatus,
+        };
+        safeQuery.images = [];
+        delete safeQuery.education;
+        delete safeQuery.physical;
       }
 
       // Attach match score for authenticated users
       if (req.user?.id) {
         safeQuery.matchScore = matchScore;
+      }
+
+      // Enrich education & occupation names
+      if (safeQuery.education) {
+        if (safeQuery.education.qualificationId) {
+          safeQuery.education.qualificationName = lookups.qualifications.get(safeQuery.education.qualificationId) || null;
+        }
+        if (safeQuery.education.jobBusiness) {
+          const occId = Number(safeQuery.education.jobBusiness);
+          if (!isNaN(occId) && lookups.occupations.has(occId)) {
+            safeQuery.education.occupationName = lookups.occupations.get(occId) || null;
+            safeQuery.education.jobBusiness = safeQuery.education.occupationName;
+          } else {
+            safeQuery.education.occupationName = safeQuery.education.jobBusiness;
+          }
+        }
+      }
+
+      // Enrich caste & religion names
+      if (safeQuery.profile) {
+        if (safeQuery.profile.casteId) {
+          safeQuery.profile.casteName = lookups.castes.get(safeQuery.profile.casteId) || null;
+        }
+        if (safeQuery.profile.subCasteId) {
+          safeQuery.profile.subCasteName = lookups.subCastes.get(safeQuery.profile.subCasteId) || null;
+        }
+        if (safeQuery.profile.religionId) {
+          safeQuery.profile.religionName = lookups.religions.get(safeQuery.profile.religionId) || null;
+        }
       }
 
       // Strip scoring-only fields from response
@@ -363,9 +464,10 @@ export const getPublicProfile = async (req: Request, res: Response) => {
 
     const isAdmin = req.user?.role === 'ADMIN';
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id));
     const whereClause: Prisma.UserWhereInput = {
-      id: id as string,
-      role: 'USER'
+      role: 'USER',
+      ...(isUuid ? { id: String(id) } : { regId: String(id).toUpperCase() })
     };
 
     if (!isAdmin) {
@@ -380,6 +482,7 @@ export const getPublicProfile = async (req: Request, res: Response) => {
         education: true,
         physical: true,
         astrology: true,
+        addresses: true,
         images: {
           orderBy: { isPrimary: 'desc' }
         }
@@ -453,10 +556,86 @@ export const getPublicProfile = async (req: Request, res: Response) => {
       userProfile.images = primaryImage ? [primaryImage] : [];
     }
 
-    const safeQuery = maskPrivateDetails(userProfile, showContactInfo);
+    const lookups = await getLookups();
+    const safeQuery: any = maskPrivateDetails(userProfile, showContactInfo);
+
+    // Enrich caste, sub-caste, religion
+    if (safeQuery.profile) {
+      if (safeQuery.profile.casteId) {
+        safeQuery.profile.casteName = lookups.castes.get(safeQuery.profile.casteId) || null;
+      }
+      if (safeQuery.profile.subCasteId) {
+        safeQuery.profile.subCasteName = lookups.subCastes.get(safeQuery.profile.subCasteId) || null;
+      }
+      if (safeQuery.profile.religionId) {
+        safeQuery.profile.religionName = lookups.religions.get(safeQuery.profile.religionId) || null;
+      }
+    }
+
+    // Enrich education qualification & occupation
+    if (safeQuery.education) {
+      if (safeQuery.education.qualificationId) {
+        safeQuery.education.qualificationName = lookups.qualifications.get(safeQuery.education.qualificationId) || null;
+      }
+      if (safeQuery.education.jobBusiness) {
+        const occId = Number(safeQuery.education.jobBusiness);
+        if (!isNaN(occId) && lookups.occupations.has(occId)) {
+          safeQuery.education.occupationName = lookups.occupations.get(occId) || null;
+          safeQuery.education.jobBusiness = safeQuery.education.occupationName;
+        } else {
+          safeQuery.education.occupationName = safeQuery.education.jobBusiness;
+        }
+      }
+    }
+
+    // Enrich family details (father occupation, mother occupation, agriculture land)
+    if (safeQuery.family) {
+      if (safeQuery.family.fatherOccupation) {
+        const occId = Number(safeQuery.family.fatherOccupation);
+        if (!isNaN(occId) && lookups.occupations.has(occId)) {
+          safeQuery.family.fatherOccupation = lookups.occupations.get(occId);
+        }
+      }
+      if (safeQuery.family.motherOccupation) {
+        const occId = Number(safeQuery.family.motherOccupation);
+        if (!isNaN(occId) && lookups.occupations.has(occId)) {
+          safeQuery.family.motherOccupation = lookups.occupations.get(occId);
+        }
+      }
+      if (safeQuery.family.agricultureLand) {
+        const landId = Number(safeQuery.family.agricultureLand);
+        if (!isNaN(landId) && LAND_RANGES[landId]) {
+          safeQuery.family.agricultureLand = LAND_RANGES[landId];
+        }
+      }
+    }
+
+    // Enrich address districts if missing
+    if (safeQuery.addresses && Array.isArray(safeQuery.addresses)) {
+      for (const addr of safeQuery.addresses) {
+        if (addr.districtId && !addr.district) {
+          addr.district = lookups.districts.get(addr.districtId) || null;
+        }
+      }
+    }
 
     if (!req.user && safeQuery.profile) {
-        safeQuery.profile.firstName = '***';
+      // Public visitors receive a directory preview only. Detailed profile,
+      // images, address and family information require an approved account.
+      res.status(200).json({
+        id: safeQuery.id,
+        regId: safeQuery.regId,
+        planType: safeQuery.planType,
+        accountStatus: safeQuery.accountStatus,
+        limited: true,
+        profile: {
+          firstName: safeQuery.profile.firstName ? `${safeQuery.profile.firstName.charAt(0)}.` : '',
+          gender: safeQuery.profile.gender,
+          maritalStatus: safeQuery.profile.maritalStatus,
+        },
+        images: [],
+      });
+      return;
     }
 
     res.status(200).json(safeQuery);

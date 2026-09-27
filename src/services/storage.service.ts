@@ -43,6 +43,30 @@ if (missingCloudinaryVars.length === 0) {
  * Buffers are streamed directly to Cloudinary; nothing is written to disk.
  */
 export class StorageService {
+  /** Generate a signed delivery URL for an authenticated Cloudinary asset. */
+  static getSignedAuthenticatedUrl(url: string): string {
+    if (missingCloudinaryVars.length > 0) return url;
+    // Legacy public assets remain readable until the planned Cloudinary
+    // re-upload migration moves them into authenticated delivery.
+    if (!url.includes('/authenticated/')) return url;
+
+    const versionMatch = url.match(/\/v\d+\/(.+)$/);
+    if (!versionMatch) throw new Error('Invalid Cloudinary URL format stored in database.');
+
+    const isRaw = url.includes('/raw/');
+    const publicIdWithExtension = versionMatch[1];
+    const publicId = isRaw
+      ? publicIdWithExtension
+      : publicIdWithExtension.substring(0, publicIdWithExtension.lastIndexOf('.')) || publicIdWithExtension;
+
+    return cloudinary.url(publicId, {
+      sign_url: true,
+      type: 'authenticated',
+      secure: true,
+      resource_type: isRaw ? 'raw' : 'image',
+    });
+  }
+
   /**
    * Uploads an image buffer to Cloudinary.
    * @param buffer Image buffer

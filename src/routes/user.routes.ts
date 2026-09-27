@@ -10,19 +10,23 @@ import { upload, processImage, uploadDocument, processDocument } from '../config
 
 const router = Router();
 
-// Routes that only need auth (not active password check)
-router.post('/change-password', requireAuth, changePassword);
-router.delete('/account', requireAuth, deleteAccount);
-router.post('/report', requireAuth, reportProfile);
-router.delete('/delete-photo/:imageId', requireAuth, deletePhoto);
-router.patch('/set-profile-photo/:imageId', requireAuth, setProfilePhoto);
-router.get('/documents/:type', requireAuth, getSignedDocumentUrl);
 
-// Routes that need auth + active password + active account status check
+// ─── Routes accessible with requiresPasswordChange still true ───────────────
+// A user who must change their password can still read their own profile so the
+// dashboard renders the Security tab with the password-change form.
+router.get('/profile', requireAuth, requireActiveAccount, getMyProfile);
+
+// Password changes remain available to pending or forced-activation users.
+router.post('/change-password', requireAuth, requireActiveAccount, changePassword);
+
+// ─── All other routes require a completed, confirmed password ─────────────────
 router.use(requireAuth, requireActivePassword, requireActiveAccount);
 
-
-router.get('/profile', getMyProfile);
+router.delete('/account', deleteAccount);
+router.post('/report', reportProfile);
+router.delete('/delete-photo/:imageId', deletePhoto);
+router.patch('/set-profile-photo/:imageId', setProfilePhoto);
+router.get('/documents/:type', getSignedDocumentUrl);
 router.post('/upload-photo', upload.single('photo'), processImage, uploadPhoto);
 router.post('/upload-kyc', uploadDocument.single('document'), processDocument, uploadKyc);
 router.post('/upload-income-proof', uploadDocument.single('document'), processDocument, uploadIncomeProof);

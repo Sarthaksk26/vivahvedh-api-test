@@ -99,12 +99,13 @@ describe('auth.middleware', () => {
       expect(next).not.toHaveBeenCalled();
     });
 
-    it('calls next if user is admin', () => {
-      const req: any = { user: { role: 'ADMIN' } };
+    it('calls next if user is admin', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ role: 'ADMIN', accountStatus: 'ACTIVE' });
+      const req: any = { user: { id: 'u-123', role: 'ADMIN' } };
       const res = mockRes();
       const next = vi.fn();
 
-      requireAdmin(req, res as any, next);
+      await requireAdmin(req, res as any, next);
 
       expect(next).toHaveBeenCalledOnce();
     });

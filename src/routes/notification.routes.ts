@@ -5,13 +5,14 @@ import {
   markAsRead,
   markAllAsRead,
 } from '../controllers/userNotification.controller';
-import { requireAuth } from '../middleware/auth.middleware';
+import { requireAuth, requireActiveAccount, requireActivePassword } from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/', requireAuth, getNotifications);
-router.get('/unread-count', requireAuth, getUnreadCount);
-router.patch('/:id/read', requireAuth, markAsRead);
-router.patch('/mark-all-read', requireAuth, markAllAsRead);
+router.use(requireAuth, requireActivePassword, requireActiveAccount);
+router.get('/', getNotifications);
+router.get('/unread-count', getUnreadCount);
+router.patch('/:id/read', markAsRead);
+router.patch('/mark-all-read', markAllAsRead);
 
 export default router;

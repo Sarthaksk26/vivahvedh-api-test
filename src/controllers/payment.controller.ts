@@ -3,6 +3,7 @@ import prisma from '../config/db';
 import { sendPaymentStatusEmail } from '../services/mail.service';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
+import { StorageService } from '../services/storage.service';
 
 const verifyPaymentSchema = z.object({
   planType: z.enum(['SILVER', 'GOLD']),
@@ -76,7 +77,10 @@ export const getPendingPayments = asyncHandler(async (req: Request, res: Respons
     include: { user: { select: { mobile: true, email: true, regId: true } } },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(payments);
+  res.json(payments.map((payment) => ({
+    ...payment,
+    screenshotUrl: StorageService.getSignedAuthenticatedUrl(payment.screenshotUrl),
+  })));
 });
 
 const updatePaymentStatusSchema = z.object({

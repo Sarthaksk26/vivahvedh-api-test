@@ -4,7 +4,7 @@ import { forgotPassword, resetPassword } from './auth.controller';
 const { prismaMock, bcryptMock } = vi.hoisted(() => ({
   prismaMock: {
     user: { findFirst: vi.fn(), update: vi.fn() },
-    passwordResetToken: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    passwordResetToken: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn(), deleteMany: vi.fn() },
     refreshToken: { deleteMany: vi.fn() },
   },
   bcryptMock: {

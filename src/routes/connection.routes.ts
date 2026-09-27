@@ -8,19 +8,20 @@ import {
   getStatusBetweenUsers,
   requestContact
 } from '../controllers/connection.controller';
-import { requireAuth, requireActiveAccount } from '../middleware/auth.middleware';
+import { requireAuth, requireActiveAccount, requireActivePassword } from '../middleware/auth.middleware';
 
 const router = Router();
 
 // ACTIONS: require active, approved account
-router.post('/send', requireAuth, requireActiveAccount, sendInterest);
-router.post('/accept', requireAuth, requireActiveAccount, acceptInterest);
-router.post('/reject', requireAuth, requireActiveAccount, rejectInterest);
-router.post('/withdraw', requireAuth, requireActiveAccount, withdrawInterest);
-router.post('/request-contact', requireAuth, requireActiveAccount, requestContact);
+router.use(requireAuth, requireActivePassword, requireActiveAccount);
+router.post('/send', sendInterest);
+router.post('/accept', acceptInterest);
+router.post('/reject', rejectInterest);
+router.post('/withdraw', withdrawInterest);
+router.post('/request-contact', requestContact);
 
 // DATA: require only auth
-router.get('/my-connections', requireAuth, getMyConnections);
-router.get('/status/:id', requireAuth, getStatusBetweenUsers);
+router.get('/my-connections', getMyConnections);
+router.get('/status/:id', getStatusBetweenUsers);
 
 export default router;

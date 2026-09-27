@@ -12,7 +12,13 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     profileView: {
       upsert: vi.fn().mockResolvedValue({}),
-    }
+    },
+    qualification: { findMany: vi.fn().mockResolvedValue([]) },
+    occupation: { findMany: vi.fn().mockResolvedValue([]) },
+    religion: { findMany: vi.fn().mockResolvedValue([]) },
+    caste: { findMany: vi.fn().mockResolvedValue([]) },
+    subCaste: { findMany: vi.fn().mockResolvedValue([]) },
+    district: { findMany: vi.fn().mockResolvedValue([]) },
   }
 }));
 
@@ -45,7 +51,7 @@ describe('getPublicProfile', () => {
 
     expect(prismaMock.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 'u-1', role: 'USER', accountStatus: 'ACTIVE' })
+        where: expect.objectContaining({ regId: 'U-1', role: 'USER', accountStatus: 'ACTIVE' })
       })
     );
     expect(res.status).toHaveBeenCalledWith(404);

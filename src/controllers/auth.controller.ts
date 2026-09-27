@@ -224,8 +224,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  // If password is correct but account is pending approval
-  if (user.accountStatus === 'INACTIVE') {
+  // If password is correct but account is pending approval AND this is NOT a forced password-change
+  // (migrated or admin-created accounts must set their password first before admin review matters)
+  if (user.accountStatus === 'INACTIVE' && !user.requiresPasswordChange) {
     res.status(403).json({ error: 'Your account is pending approval. Please wait for our team to verify your profile.' });
     return;
   }
@@ -240,9 +241,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   };
 
   // Issue dual tokens and set HttpOnly cookies
-  const { accessToken, refreshToken } = await issueDualTokens(res, tokenPayload);
+  await issueDualTokens(res, tokenPayload);
 
-  // Response contains NO tokens — they are in HttpOnly cookies
+  // Tokens are only sent in HttpOnly cookies, never in JSON or browser storage.
   const responseBody: LoginResponse = {
     message: 'Login successful.',
     user: {
@@ -252,8 +253,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       planType: user.planType,
       requiresPasswordChange: user.requiresPasswordChange,
     },
-    accessToken,
-    refreshToken,
   };
 
   res.status(200).json(responseBody);
@@ -264,8 +263,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════
 
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
-  // Try to get token from body first (frontend fallback), then from cookies
-  const refreshCookie = req.body?.refreshToken || req.cookies?.[REFRESH_TOKEN_COOKIE];
+  const refreshCookie = req.cookies?.[REFRESH_TOKEN_COOKIE];
 
   if (!refreshCookie) {
     res.status(401).json({ error: 'No refresh token provided.' });
@@ -380,7 +378,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     requiresPasswordChange: user.requiresPasswordChange,
   };
 
-  const { accessToken, refreshToken: newRefreshToken } = await issueDualTokens(res, tokenPayload);
+  await issueDualTokens(res, tokenPayload);
 
   res.status(200).json({
     message: 'Token refreshed.',
@@ -391,8 +389,6 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
       planType: user.planType,
       requiresPasswordChange: user.requiresPasswordChange,
     },
-    accessToken,
-    refreshToken: newRefreshToken,
   });
 });
 
@@ -401,7 +397,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  const refreshCookie = req.body?.refreshToken || req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
+  const refreshCookie = req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
 
   if (refreshCookie) {
     // Remove the specific token from DB
@@ -443,6 +439,9 @@ export const forgotPassword = asyncHandler(async (req: Request, res: Response) =
   // Generate secure token
   const rawToken = crypto.randomBytes(32).toString('hex');
   const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+  // Supersede older unused links so only one reset link is valid at a time.
+  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
 
   // Store hashed token (expires in 1 hour)
   await prisma.passwordResetToken.create({
@@ -515,4 +514,3 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
 
   res.status(200).json({ message: 'Password has been successfully reset. You can now log in.' });
 });
-
