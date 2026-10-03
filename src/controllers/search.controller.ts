@@ -263,14 +263,10 @@ export const executeSearch = async (req: Request, res: Response) => {
     const pageSize = Math.min(parseInt(String(limit)) || 20, 50); // Cap at 50
 
     // ── Pagination strategy ──────────────────────────────────────────
-    // Authenticated searches use personalized matchScore which diverges from
-    // DB order (planType/createdAt/id). Cursor pagination would produce
-    // duplicates/skips because the display order != cursor order.
-    // For small-to-medium datasets, offset pagination is performant and correct.
-    // Guest searches (no matchScore) keep efficient cursor pagination.
+    // Use offset pagination for all users to support numbered pages in the UI
     const isAuthenticated = !!req.user?.id;
-    const page = isAuthenticated ? Math.max(0, parseInt(String(req.query.page || '0'))) : 0;
-    const skip = isAuthenticated ? page * pageSize : 0;
+    const page = Math.max(0, parseInt(String(req.query.page || '0')));
+    const skip = page * pageSize;
 
     // ── Count total matching candidates for pagination metadata ──
     const totalResults = await prisma.user.count({ where: baseWhere });
@@ -298,9 +294,8 @@ export const executeSearch = async (req: Request, res: Response) => {
         { createdAt: 'desc' },
         { id: 'asc' }
       ],
-      take: isAuthenticated ? SCORING_POOL_SIZE : pageSize + 1,
-      cursor: isAuthenticated ? undefined : (cursor ? { id: String(cursor) } : undefined),
-      skip: isAuthenticated ? 0 : (cursor ? 1 : 0),
+      take: isAuthenticated ? SCORING_POOL_SIZE : pageSize,
+      skip: isAuthenticated ? 0 : skip,
     });
 
     // ── Build scoring context from the querier's own profile ─────
@@ -336,7 +331,6 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // ── Determine pagination ─────────────────────────────────────
     let pageResults: typeof matches;
-    let nextCursor: string | null = null;
     let hasMore = false;
 
     if (isAuthenticated) {
@@ -350,13 +344,10 @@ export const executeSearch = async (req: Request, res: Response) => {
       hasMore = scoredAll.length > skip + pageSize;
       const pageScored = scoredAll.slice(skip, skip + pageSize);
       pageResults = pageScored.map(({ user }) => user);
-      // Cursor not meaningful for offset pagination; clients use page number
     } else {
-      // Guest: cursor pagination (no personalized scoring, just planWeight)
-      hasMore = matches.length > pageSize;
-      pageResults = hasMore ? matches.slice(0, pageSize) : matches;
-      const lastMatch = pageResults[pageResults.length - 1];
-      nextCursor = hasMore ? lastMatch?.id ?? null : null;
+      // Guest: offset pagination
+      hasMore = totalResults > skip + pageSize;
+      pageResults = matches;
     }
 
     // ── Score and sort page results (guest path needs this too) ───────────────────────────────────────────
@@ -434,13 +425,8 @@ export const executeSearch = async (req: Request, res: Response) => {
 
     // Build pagination response
     const pagination: Record<string, any> = { hasMore, pageSize, totalResults };
-    if (isAuthenticated) {
-      pagination.page = page;
-      pagination.totalPages = Math.ceil(Math.min(totalResults, SCORING_POOL_SIZE) / pageSize);
-      pagination.nextCursor = null; // offset pagination uses page number
-    } else {
-      pagination.nextCursor = nextCursor;
-    }
+    pagination.page = page;
+    pagination.totalPages = Math.ceil((isAuthenticated ? Math.min(totalResults, SCORING_POOL_SIZE) : totalResults) / pageSize);
 
     res.status(200).json({
       results: safeMatches,
