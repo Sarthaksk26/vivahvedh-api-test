@@ -180,6 +180,7 @@ export const getMyProfile = asyncHandler(async (req: Request, res: Response) => 
       astrology: true,
       preferences: true,
       images: true,
+      addresses: true,
     },
   });
 

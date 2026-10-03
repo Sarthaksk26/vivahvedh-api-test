@@ -20,6 +20,24 @@ import crypto from 'crypto';
 const DRY_RUN = process.argv.includes('--dry-run');
 const LOOKUPS_ONLY = process.argv.includes('--lookups-only');
 
+/** Sanitize a legacy DB value: convert literal 'NULL' and empty strings to null.
+ *  Preserves '0' and other numeric strings since they may be valid IDs or data. */
+function cleanVal(v: any): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (s === '' || s.toUpperCase() === 'NULL') return null;
+  return s;
+}
+
+function safeDate(d: any): Date | null {
+  if (!d) return null;
+  const parsed = new Date(d);
+  if (isNaN(parsed.getTime())) return null;
+  // Ignore '0000-00-00'
+  if (parsed.getFullYear() < 1900) return null;
+  return parsed;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  PART 1: MySQL Dump Parser
 // ═══════════════════════════════════════════════════════════════════
@@ -566,8 +584,8 @@ async function migrateMembers(sql: string) {
           isPrimary: idx === 0,
         }));
 
-      // Resolve occupation from job_business ID if numeric
-      let resolvedJobBusiness: string | null = m.job_business ? String(m.job_business) : null;
+      // Store job_business: resolve numeric occupation IDs to readable names, keep raw text as-is
+      let resolvedJobBusiness: string | null = cleanVal(m.job_business);
       if (resolvedJobBusiness) {
         const occId = Number(resolvedJobBusiness);
         if (!isNaN(occId) && occupationMap.has(occId)) {
@@ -575,15 +593,15 @@ async function migrateMembers(sql: string) {
         }
       }
 
-      // Resolve father and mother occupation
-      let resolvedFatherOccupation: string | null = m.fatherOccupation ? String(m.fatherOccupation) : null;
+      // Resolve father and mother occupation from occupationMap if numeric
+      let resolvedFatherOccupation: string | null = cleanVal(m.fatherOccupation);
       if (resolvedFatherOccupation) {
         const occId = Number(resolvedFatherOccupation);
         if (!isNaN(occId) && occupationMap.has(occId)) {
           resolvedFatherOccupation = occupationMap.get(occId) || resolvedFatherOccupation;
         }
       }
-      let resolvedMotherOccupation: string | null = m.motherOccupation ? String(m.motherOccupation) : null;
+      let resolvedMotherOccupation: string | null = cleanVal(m.motherOccupation);
       if (resolvedMotherOccupation) {
         const occId = Number(resolvedMotherOccupation);
         if (!isNaN(occId) && occupationMap.has(occId)) {
@@ -592,7 +610,7 @@ async function migrateMembers(sql: string) {
       }
 
       // Resolve agriculture land from landMap
-      let resolvedAgriLand: string | null = m.agricultureLand ? String(m.agricultureLand) : null;
+      let resolvedAgriLand: string | null = cleanVal(m.agricultureLand);
       if (resolvedAgriLand) {
         const landId = Number(resolvedAgriLand);
         if (!isNaN(landId) && landMap.has(landId)) {
@@ -628,21 +646,21 @@ async function migrateMembers(sql: string) {
           // Migrating legacy passwords, but requiring users to update them immediately on login for security.
           requiresPasswordChange: true,
           paymentDone: m.paymentDone === 'Yes',
-          lastPaidOn: m.lastPaidOn ? new Date(m.lastPaidOn) : null,
-          createdAt: m.createdDatetime ? new Date(m.createdDatetime) : undefined,
+          lastPaidOn: safeDate(m.lastPaidOn),
+          createdAt: safeDate(m.createdDatetime) || undefined,
           kycType,
           kycNumber: m.idProofNumber ? String(m.idProofNumber) : null,
 
           profile: {
             create: {
-              firstName: m.firstName || 'Unknown',
-              lastName: m.lastName || '',
-              middleName: m.middleName || '',
+              firstName: cleanVal(m.firstName) || 'Unknown',
+              lastName: cleanVal(m.lastName) || '',
+              middleName: cleanVal(m.middleName) || '',
               gender,
               maritalStatus,
               birthDateTime,
-              birthPlace: m.birthPlace || null,
-              aboutMe: m.aboutMe || null,
+              birthPlace: cleanVal(m.birthPlace),
+              aboutMe: cleanVal(m.aboutMe),
               religionId: religionId && !isNaN(religionId) ? religionId : null,
               casteId: casteId && !isNaN(casteId) ? casteId : null,
               subCasteId: subCasteId && !isNaN(subCasteId) ? subCasteId : null,
@@ -653,10 +671,10 @@ async function migrateMembers(sql: string) {
             create: {
               height: heightVal,
               weight: typeof weightVal === 'number' ? weightVal : null,
-              bloodGroup: m.bloodGroup || null,
-              complexion: m.complexion || null,
-              health: m.health || null,
-              diet: m.diet || null,
+              bloodGroup: cleanVal(m.bloodGroup),
+              complexion: cleanVal(m.complexion),
+              health: cleanVal(m.health),
+              diet: cleanVal(m.diet),
               smoke,
               drink,
             },
@@ -664,52 +682,52 @@ async function migrateMembers(sql: string) {
 
           astrology: {
             create: {
-              gothra: m.gothra || null,
-              rashi: m.rashi || null,
-              nakshatra: m.nakshatra || null,
-              charan: m.charan || null,
-              nadi: m.nadi || null,
-              gan: m.gan || null,
-              mangal: m.mangal || null,
+              gothra: cleanVal(m.gothra),
+              rashi: cleanVal(m.rashi),
+              nakshatra: cleanVal(m.nakshatra),
+              charan: cleanVal(m.charan),
+              nadi: cleanVal(m.nadi),
+              gan: cleanVal(m.gan),
+              mangal: cleanVal(m.mangal),
             },
           },
 
           education: {
             create: {
               qualificationId: m.qualification != null && !isNaN(Number(m.qualification)) && String(m.qualification).trim() !== '' ? Number(m.qualification) : null,
-              trade: m.trade || null,
-              college: m.collegeuniversity || null,
+              trade: cleanVal(m.trade),
+              college: cleanVal(m.collegeuniversity),
               jobBusiness: resolvedJobBusiness,
-              jobAddress: m.job_businessAddress || null,
+              jobAddress: cleanVal(m.job_businessAddress),
               annualIncome,
-              specialAchievement: m.specialAchievement || null,
+              specialAchievement: cleanVal(m.specialAchievement),
             },
           },
 
           family: {
             create: {
-              fatherName: m.fatherFullName || null,
+              fatherName: cleanVal(m.fatherFullName),
               fatherOccupation: resolvedFatherOccupation,
-              motherName: m.motherFullName || null,
+              motherName: cleanVal(m.motherFullName),
               motherOccupation: resolvedMotherOccupation,
-              motherHometown: m.motherHometown || null,
-              maternalUncleName: m.maternalUncleName || null,
+              motherHometown: cleanVal(m.motherHometown),
+              maternalUncleName: cleanVal(m.maternalUncleName),
               brothers: Number(m.brothers) || 0,
               marriedBrothers: Number(m.marriedBrothers) || 0,
               sisters: Number(m.sisters) || 0,
               marriedSisters: Number(m.marriedSisters) || 0,
-              relativesSirnames: m.relativesSirnames || null,
+              relativesSirnames: cleanVal(m.relativesSirnames),
               familyBackground: resolvedFamilyBackground,
               familyWealth: resolvedFamilyWealth,
               agricultureLand: resolvedAgriLand,
-              plot: m.plot || null,
-              flat: m.flat || null,
+              plot: cleanVal(m.plot),
+              flat: cleanVal(m.flat),
             },
           },
 
           preferences: {
             create: {
-              expectations: m.expectations || null,
+              expectations: cleanVal(m.expectations),
             },
           },
 
@@ -781,7 +799,7 @@ async function migrateRequests(sql: string) {
       senderId,
       receiverId,
       status,
-      createdAt: r.CreatedDatetime ? new Date(r.CreatedDatetime) : new Date(),
+      createdAt: safeDate(r.CreatedDatetime) || new Date(),
     });
 
     if (batch.length >= BATCH_SIZE) {
